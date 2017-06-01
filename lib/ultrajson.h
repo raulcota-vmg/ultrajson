@@ -98,6 +98,9 @@ typedef __int64 JSLONG;
 #define FASTCALL_ATTR
 #define INLINE_PREFIX __inline
 
+#define LIKELY(x)       (x)
+#define UNLIKELY(x)     (x)
+
 #else
 
 #include <stdint.h>
