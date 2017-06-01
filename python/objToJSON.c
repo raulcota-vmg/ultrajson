@@ -591,7 +591,7 @@ ISITERABLE:
   if (PyTuple_Check(obj))
   {
     PRINTMARK();
-    tc->type = JT_ARRAY;
+    tc->type = JT_TUPLE;
     pc->iterEnd = Tuple_iterEnd;
     pc->iterNext = Tuple_iterNext;
     pc->iterGetValue = Tuple_iterGetValue;

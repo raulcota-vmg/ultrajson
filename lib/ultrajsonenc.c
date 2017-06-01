@@ -496,7 +496,8 @@ static int Buffer_EscapeStringValidated (JSOBJ obj, JSONObjectEncoder *enc, cons
 
 
 #define Buffer_AppendCharUnchecked(__enc, __chr) \
-                *((__enc)->offset++) = __chr; \
+               { assert( ((__enc)->end - (__enc)->offset - 1) > 0) ;\
+                *((__enc)->offset++) = __chr; }\
 
 static FASTCALL_ATTR INLINE_PREFIX void FASTCALL_MSVC strreverse(char* begin, char* end)
 {
@@ -692,6 +693,50 @@ static void encode(JSOBJ obj, JSONObjectEncoder *enc, const char *name, size_t c
       Buffer_AppendCharUnchecked (enc, ']');
       break;
     }
+
+	case JT_TUPLE:
+	{
+		count = 0;
+
+		// Special handling for tuples
+		const char objOpen[] = "{\"__type__\": \"__tuple__\", \"tuple\" :";
+		for (const char* ptr = objOpen; ptr != '\0'; ptr++) {
+			Buffer_AppendCharUnchecked(enc, ptr);
+		}
+
+
+
+		Buffer_AppendCharUnchecked(enc, '[');
+		Buffer_AppendIndentNewlineUnchecked(enc);
+
+		while (enc->iterNext(obj, &tc))
+		{
+			if (count > 0)
+			{
+				Buffer_AppendCharUnchecked(enc, ',');
+#ifndef JSON_NO_EXTRA_WHITESPACE
+				Buffer_AppendCharUnchecked(enc, ' ');
+#endif
+				Buffer_AppendIndentNewlineUnchecked(enc);
+			}
+
+			iterObj = enc->iterGetValue(obj, &tc);
+
+			enc->level++;
+			Buffer_AppendIndentUnchecked(enc, enc->level);
+			encode(iterObj, enc, NULL, 0);
+			count++;
+		}
+
+		enc->iterEnd(obj, &tc);
+		Buffer_AppendIndentNewlineUnchecked(enc);
+		Buffer_AppendIndentUnchecked(enc, enc->level);
+		Buffer_AppendCharUnchecked(enc, ']');
+
+		Buffer_AppendCharUnchecked(enc, '}');
+
+		break;
+	}
 
     case JT_OBJECT:
     {
