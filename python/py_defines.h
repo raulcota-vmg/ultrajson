@@ -38,6 +38,10 @@ http://www.opensource.apple.com/source/tcl/tcl-14/tcl/license.terms
 
 #include <Python.h>
 
+#ifdef NUMPYSUPPORT
+#include "arrayobject.h"
+#endif // NUMPYSUPPORT
+
 #if PY_MAJOR_VERSION >= 3
 
 #define PyInt_Check             PyLong_Check

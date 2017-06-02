@@ -60,6 +60,7 @@ typedef struct __TypeContext
   PyObject *dictObj;
   Py_ssize_t index;
   Py_ssize_t size;
+  char npArrType;
   PyObject *itemValue;
   PyObject *itemName;
   PyObject *attrList;
@@ -221,6 +222,19 @@ static int List_iterNext(JSOBJ obj, JSONTypeContext *tc)
   return 1;
 }
 
+static int ListFromNumpyArray_iterNext(JSOBJ obj, JSONTypeContext *tc)
+{
+	if (GET_TC(tc)->index >= GET_TC(tc)->size)
+	{
+		PRINTMARK();
+		return 0;
+	}
+
+	GET_TC(tc)->itemValue = PyList_GET_ITEM(GET_TC(tc)->attrList, GET_TC(tc)->index);
+	GET_TC(tc)->index++;
+	return 1;
+}
+
 static void List_iterEnd(JSOBJ obj, JSONTypeContext *tc)
 {
 }
@@ -234,6 +248,12 @@ static char *List_iterGetName(JSOBJ obj, JSONTypeContext *tc, size_t *outLen)
 {
   return NULL;
 }
+
+static char *NumpyArray_GetDType(JSOBJ obj, JSONTypeContext *tc, size_t *outLen)
+{
+	return GET_TC(tc)->npArrType;
+}
+
 
 //=============================================================================
 // Dict iteration functions
@@ -463,6 +483,14 @@ static void Object_beginTypeContext (JSOBJ _obj, JSONTypeContext *tc, JSONObject
 
   obj = (PyObject*) _obj;
 
+#ifdef NUMPYSUPPORT
+  if (PyArray_API == NULL)
+  {
+  	import_array();
+  }
+#endif
+
+
   tc->prv = PyObject_Malloc(sizeof(TypeContext));
   pc = (TypeContext *) tc->prv;
   if (!pc)
@@ -564,6 +592,44 @@ static void Object_beginTypeContext (JSOBJ _obj, JSONTypeContext *tc, JSONObject
     tc->type = JT_NULL;
     return;
   }
+#ifdef NUMPYSUPPORT
+  else
+  if (PyArray_Check(obj))
+  {
+	  
+	  tc->type = JT_NPARRAY;
+
+	  //Conver the numpy array to a list
+	  PyObject* toListFunc = PyObject_GetAttrString(obj, "tolist");
+	  PyObject* tuple = PyTuple_New(0);
+	  PyObject* toListResult = PyObject_Call(toListFunc, tuple, NULL);
+	  Py_DECREF(tuple);
+	  Py_DECREF(toListFunc);
+
+	  if (toListResult == NULL)
+	  {
+		  goto INVALID;
+	  }
+
+	  
+	  //int pd = (PyObject *)PyArray_TYPE(obj);
+
+	  pc->iterEnd = List_iterEnd;
+	  pc->iterNext = ListFromNumpyArray_iterNext;
+	  pc->iterGetValue = List_iterGetValue;
+	  pc->iterGetName = NumpyArray_GetDType;
+	  pc->attrList = toListResult;
+	  GET_TC(tc)->index = 0;
+	  GET_TC(tc)->size = PyList_GET_SIZE((PyObject *)toListResult);
+
+	  PyArray_Descr *pd = (PyObject *)PyArray_DESCR(obj);
+	  GET_TC(tc)->npArrType = pd->kind;
+
+	  return;
+
+  }
+
+#endif
 
 ISITERABLE:
   if (PyDict_Check(obj))
@@ -680,6 +746,11 @@ INVALID:
 static void Object_endTypeContext(JSOBJ obj, JSONTypeContext *tc)
 {
   Py_XDECREF(GET_TC(tc)->newObj);
+
+  if (tc->type == JT_NPARRAY) {
+	  Py_XDECREF(GET_TC(tc)->attrList);
+  }
+
 
   PyObject_Free(tc->prv);
   tc->prv = NULL;

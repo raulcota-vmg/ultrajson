@@ -91,6 +91,8 @@ static struct PyModuleDef moduledef = {
 
 #endif
 
+
+
 PYMODINITFUNC
 {
   PyObject *module;
@@ -98,6 +100,10 @@ PYMODINITFUNC
 
   initObjToJSON();
   module = PYMODULE_CREATE();
+
+#ifdef NUMPYSUPPORT
+  import_array();
+#endif // NUMPYSUPPORT
 
   if (module == NULL)
   {

@@ -696,11 +696,65 @@ static void encode(JSOBJ obj, JSONObjectEncoder *enc, const char *name, size_t c
       break;
     }
 
+	case JT_NPARRAY:
+	{
+		count = 0;
+
+		// Special handling
+		char * ptr;
+		const char objOpen[] = "{\"__type__\": \"__ndarray__\", \"dtype\":\"";
+		for (ptr = objOpen; ptr[0] != '\0'; ptr++) {
+			Buffer_AppendCharUnchecked(enc, ptr[0]);
+		}
+
+		char dtype = 'f';
+		dtype = enc->iterGetName(obj, &tc, 1);
+		Buffer_AppendCharUnchecked(enc, dtype);
+
+		const char objOpen2[] = "\", \"cont\" :";
+		for (ptr = objOpen2; ptr[0] != '\0'; ptr++) {
+			Buffer_AppendCharUnchecked(enc, ptr[0]);
+		}
+
+
+
+		Buffer_AppendCharUnchecked(enc, '[');
+		Buffer_AppendIndentNewlineUnchecked(enc);
+
+		while (enc->iterNext(obj, &tc))
+		{
+			if (count > 0)
+			{
+				Buffer_AppendCharUnchecked(enc, ',');
+#ifndef JSON_NO_EXTRA_WHITESPACE
+				Buffer_AppendCharUnchecked(enc, ' ');
+#endif
+				Buffer_AppendIndentNewlineUnchecked(enc);
+			}
+
+			iterObj = enc->iterGetValue(obj, &tc);
+
+			enc->level++;
+			Buffer_AppendIndentUnchecked(enc, enc->level);
+			encode(iterObj, enc, NULL, 0);
+			count++;
+		}
+
+		enc->iterEnd(obj, &tc);
+		Buffer_AppendIndentNewlineUnchecked(enc);
+		Buffer_AppendIndentUnchecked(enc, enc->level);
+		Buffer_AppendCharUnchecked(enc, ']');
+
+		Buffer_AppendCharUnchecked(enc, '}');
+
+		break;
+	}
+
 	case JT_TUPLE:
 	{
 		count = 0;
 
-		// Special handling for tuples
+		// Special handling
 		const char objOpen[] = "{\"__type__\": \"__tuple__\", \"cont\" :";
 		for (char* ptr = objOpen; ptr[0] != '\0'; ptr++) {
 			Buffer_AppendCharUnchecked(enc, ptr[0]);
