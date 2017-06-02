@@ -168,7 +168,8 @@ enum JSTYPES
   JT_RAW,       // (raw char 8-bit)
   JT_ARRAY,     // Array structure
   JT_OBJECT,    // Key/Value structure
-  JT_TUPLE,
+  JT_TUPLE,     // Tuples
+  JT_NPARRAY,   // Numpy array
   JT_INVALID,   // Internal, do not return nor expect
 };
 

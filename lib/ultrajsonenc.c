@@ -494,10 +494,12 @@ static int Buffer_EscapeStringValidated (JSOBJ obj, JSONObjectEncoder *enc, cons
       Buffer_Realloc((__enc), (__len));\
     }   \
 
-
 #define Buffer_AppendCharUnchecked(__enc, __chr) \
-               { assert( ((__enc)->end - (__enc)->offset - 1) > 0) ;\
-                *((__enc)->offset++) = __chr; }\
+                *((__enc)->offset++) = __chr; \
+
+//#define Buffer_AppendCharUnchecked(__enc, __chr) \
+             //  { assert( ((__enc)->end - (__enc)->offset - 1) > 0) ;\
+             //   *((__enc)->offset++) = __chr; }\
 
 static FASTCALL_ATTR INLINE_PREFIX void FASTCALL_MSVC strreverse(char* begin, char* end)
 {
@@ -699,12 +701,10 @@ static void encode(JSOBJ obj, JSONObjectEncoder *enc, const char *name, size_t c
 		count = 0;
 
 		// Special handling for tuples
-		const char objOpen[] = "{\"__type__\": \"__tuple__\", \"tuple\" :";
-		for (const char* ptr = objOpen; ptr != '\0'; ptr++) {
-			Buffer_AppendCharUnchecked(enc, ptr);
+		const char objOpen[] = "{\"__type__\": \"__tuple__\", \"cont\" :";
+		for (char* ptr = objOpen; ptr[0] != '\0'; ptr++) {
+			Buffer_AppendCharUnchecked(enc, ptr[0]);
 		}
-
-
 
 		Buffer_AppendCharUnchecked(enc, '[');
 		Buffer_AppendIndentNewlineUnchecked(enc);
