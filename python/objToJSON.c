@@ -694,6 +694,27 @@ ISITERABLE:
     SetupDictIter(toDictResult, pc, enc);
     return;
   }
+  if (UNLIKELY(PyObject_HasAttrString(obj, "__dict__")))
+  {
+	  PyObject* toDictResult = PyObject_GetAttrString(obj, "__dict__");
+
+	  if (toDictResult == NULL)
+	  {
+		  goto INVALID;
+	  }
+
+	  if (!PyDict_Check(toDictResult))
+	  {
+		  Py_DECREF(toDictResult);
+		  tc->type = JT_NULL;
+		  return;
+	  }
+
+	  PRINTMARK();
+	  tc->type = JT_OBJECT;
+	  SetupDictIter(toDictResult, pc, enc);
+	  return;
+  }
   else
   if (UNLIKELY(PyObject_HasAttrString(obj, "__json__")))
   {
@@ -816,7 +837,14 @@ static char *Object_iterGetName(JSOBJ obj, JSONTypeContext *tc, size_t *outLen)
 
 PyObject* objToJSON(PyObject* self, PyObject *args, PyObject *kwargs)
 {
-  static char *kwlist[] = { "obj", "ensure_ascii", "encode_html_chars", "escape_forward_slashes", "sort_keys", "indent", NULL };
+  static char *kwlist[] = { "obj", 
+	  "ensure_ascii", 
+	  "encode_html_chars", 
+	  "escape_forward_slashes", 
+	  "sort_keys", 
+	  "indent", 
+	  //"tag_non_lists",
+	  NULL };
 
   char buffer[65536];
   char *ret;
@@ -826,6 +854,7 @@ PyObject* objToJSON(PyObject* self, PyObject *args, PyObject *kwargs)
   PyObject *oencodeHTMLChars = NULL;
   PyObject *oescapeForwardSlashes = NULL;
   PyObject *osortKeys = NULL;
+  PyObject *tagNonLists = NULL;
 
   JSONObjectEncoder encoder =
   {
@@ -850,13 +879,19 @@ PyObject* objToJSON(PyObject* self, PyObject *args, PyObject *kwargs)
     1, //escapeForwardSlashes
     0, //sortKeys
     0, //indent
+//	0, //tagNonLists
     NULL, //prv
   };
 
 
   PRINTMARK();
 
-  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|OOOOi", kwlist, &oinput, &oensureAscii, &oencodeHTMLChars, &oescapeForwardSlashes, &osortKeys, &encoder.indent))
+  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|OOOOi", kwlist, &oinput, 
+																    &oensureAscii, 
+																    &oencodeHTMLChars, 
+																    &oescapeForwardSlashes, 
+																    &osortKeys, 
+																    &encoder.indent))
   {
     return NULL;
   }
@@ -880,6 +915,12 @@ PyObject* objToJSON(PyObject* self, PyObject *args, PyObject *kwargs)
   {
     encoder.sortKeys = 1;
   }
+
+  //if (tagNonLists != NULL && PyObject_IsTrue(tagNonLists))
+  //{
+//	  encoder.tagNonLists = 1;
+ // }
+
 
   dconv_d2s_init(DCONV_D2S_EMIT_TRAILING_DECIMAL_POINT | DCONV_D2S_EMIT_TRAILING_ZERO_AFTER_POINT,
                  NULL, NULL, 'e', DCONV_DECIMAL_IN_SHORTEST_LOW, DCONV_DECIMAL_IN_SHORTEST_HIGH, 0, 0);

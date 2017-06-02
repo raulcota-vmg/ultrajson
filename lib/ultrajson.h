@@ -267,6 +267,10 @@ typedef struct __JSONObjectEncoder
   int indent;
 
   /*
+  Tag tuples and numeric arrays specially as opposed to making them look like lists */
+  //int tagNonLists;
+
+  /*
   Private pointer to be used by the caller. Passed as encoder_prv in JSONTypeContext */
   void *prv;
 

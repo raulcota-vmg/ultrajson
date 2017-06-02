@@ -711,7 +711,7 @@ static void encode(JSOBJ obj, JSONObjectEncoder *enc, const char *name, size_t c
 		dtype = enc->iterGetName(obj, &tc, 1);
 		Buffer_AppendCharUnchecked(enc, dtype);
 
-		const char objOpen2[] = "\", \"cont\" :";
+		const char objOpen2[] = "\", \"content\": ";
 		for (ptr = objOpen2; ptr[0] != '\0'; ptr++) {
 			Buffer_AppendCharUnchecked(enc, ptr[0]);
 		}
@@ -754,8 +754,9 @@ static void encode(JSOBJ obj, JSONObjectEncoder *enc, const char *name, size_t c
 	{
 		count = 0;
 
+		//if (enc->tagNonLists && )
 		// Special handling
-		const char objOpen[] = "{\"__type__\": \"__tuple__\", \"cont\" :";
+		const char objOpen[] = "{\"__type__\": \"__tuple__\", \"content\": ";
 		for (char* ptr = objOpen; ptr[0] != '\0'; ptr++) {
 			Buffer_AppendCharUnchecked(enc, ptr[0]);
 		}
