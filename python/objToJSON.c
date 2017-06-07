@@ -694,9 +694,13 @@ ISITERABLE:
     SetupDictIter(toDictResult, pc, enc);
     return;
   }
-  if (UNLIKELY(PyObject_HasAttrString(obj, "__dict__")))
+  if (enc->objHandler)
   {
-	  PyObject* toDictResult = PyObject_GetAttrString(obj, "__dict__");
+	  //PyObject* toDictResult = PyObject_GetAttrString(obj, "__dict__");
+	  PyObject * pyObjHandler = (PyObject*)enc->objHandler;
+	  PyObject* tuple = Py_BuildValue("(O)", obj);
+	  PyObject* toDictResult = PyObject_Call(pyObjHandler, tuple, NULL);
+	  Py_DECREF(tuple);
 
 	  if (toDictResult == NULL)
 	  {
@@ -843,7 +847,7 @@ PyObject* objToJSON(PyObject* self, PyObject *args, PyObject *kwargs)
 	  "escape_forward_slashes", 
 	  "sort_keys", 
 	  "indent", 
-	  //"tag_non_lists",
+	  "obj_handler",
 	  NULL };
 
   char buffer[65536];
@@ -855,6 +859,7 @@ PyObject* objToJSON(PyObject* self, PyObject *args, PyObject *kwargs)
   PyObject *oescapeForwardSlashes = NULL;
   PyObject *osortKeys = NULL;
   PyObject *tagNonLists = NULL;
+  PyObject *pyObjHandler = NULL;
 
   JSONObjectEncoder encoder =
   {
@@ -879,19 +884,21 @@ PyObject* objToJSON(PyObject* self, PyObject *args, PyObject *kwargs)
     1, //escapeForwardSlashes
     0, //sortKeys
     0, //indent
-//	0, //tagNonLists
     NULL, //prv
+	NULL, //pyObjHandler
+
   };
 
 
   PRINTMARK();
 
-  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|OOOOi", kwlist, &oinput, 
+  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|OOOOiO", kwlist, &oinput, 
 																    &oensureAscii, 
 																    &oencodeHTMLChars, 
 																    &oescapeForwardSlashes, 
 																    &osortKeys, 
-																    &encoder.indent))
+																    &encoder.indent,
+	                                                                &pyObjHandler))
   {
     return NULL;
   }
@@ -916,6 +923,10 @@ PyObject* objToJSON(PyObject* self, PyObject *args, PyObject *kwargs)
     encoder.sortKeys = 1;
   }
 
+  if (pyObjHandler != NULL)
+  {
+	  encoder.objHandler = pyObjHandler;
+  }
   //if (tagNonLists != NULL && PyObject_IsTrue(tagNonLists))
   //{
 //	  encoder.tagNonLists = 1;

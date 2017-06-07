@@ -56,6 +56,7 @@ tree doesn't have cyclic references.
 #include <stdio.h>
 #include <wchar.h>
 
+
 // Don't output any extra whitespaces when encoding
 #define JSON_NO_EXTRA_WHITESPACE
 
@@ -192,7 +193,7 @@ typedef char *(*JSPFN_ITERGETNAME)(JSOBJ obj, JSONTypeContext *tc, size_t *outLe
 typedef void *(*JSPFN_MALLOC)(size_t size);
 typedef void (*JSPFN_FREE)(void *pptr);
 typedef void *(*JSPFN_REALLOC)(void *base, size_t size);
-
+typedef void (*JSPFN_GENOBJHANDLER)(JSOBJ obj, JSONTypeContext *tc);
 
 struct __JSONObjectEncoder;
 
@@ -267,12 +268,12 @@ typedef struct __JSONObjectEncoder
   int indent;
 
   /*
-  Tag tuples and numeric arrays specially as opposed to making them look like lists */
-  //int tagNonLists;
-
-  /*
   Private pointer to be used by the caller. Passed as encoder_prv in JSONTypeContext */
   void *prv;
+
+
+  /* */
+  void *objHandler;
 
   /*
   Set to an error message if error occured */
