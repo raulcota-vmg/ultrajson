@@ -36,10 +36,17 @@ http://www.opensource.apple.com/source/tcl/tcl-14/tcl/license.terms
  * Copyright (c) 1994 Sun Microsystems, Inc.
 */
 
+#define HAVE_ACOSH
+#define HAVE_ASINH
+#define HAVE_ATANH
+#define HAVE_LOG1P
+
 #include <Python.h>
+
 
 #ifdef NUMPYSUPPORT
 #include "arrayobject.h"
+#include "arrayscalars.h"
 #endif // NUMPYSUPPORT
 
 #if PY_MAJOR_VERSION >= 3

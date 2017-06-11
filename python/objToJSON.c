@@ -134,6 +134,82 @@ static void *PyFloatToDOUBLE(JSOBJ _obj, JSONTypeContext *tc, void *outValue, si
   return NULL;
 }
 
+static void *PyNPScalarDoubleToDOUBLE(JSOBJ _obj, JSONTypeContext *tc, void *outValue, size_t *_outLen)
+{
+	PyObject *obj = (PyObject *)_obj;
+	*((double *)outValue) = ((PyDoubleScalarObject *)obj)->obval;
+	return NULL;
+}
+/*
+static void *PyNPScalarGenericIntToINT64(JSOBJ _obj, JSONTypeContext *tc, void *outValue, size_t *_outLen)
+{
+	PyObject *obj = (PyObject *)_obj;
+
+
+  //This all is ok to convert to integers
+  if (PyArray_IsScalar(obj, Byte))
+  {
+	  tc->type = (((PyByteScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
+	  return;
+  }
+  else
+  if (PyArray_IsScalar(obj, UByte))
+  {
+	  tc->type = (((PyUByteScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
+	  return;
+  }
+  else
+  if (PyArray_IsScalar(obj, Short))
+  {
+	  tc->type = (((PyShortScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
+	  return;
+  }
+  else
+  if (PyArray_IsScalar(obj, UShort))
+  {
+	tc->type = (((PyUShortScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
+	return;
+  }
+  else
+  if (PyArray_IsScalar(obj, Int))
+  {
+	tc->type = (((PyIntScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
+	return;
+  }
+  else
+  if (PyArray_IsScalar(obj, UInt))
+  {
+	tc->type = (((PyUIntScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
+	return;
+  }
+  else
+  if (PyArray_IsScalar(obj, Long))
+  {
+	tc->type = (((PyLongScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
+	return;
+  }
+  else
+  if (PyArray_IsScalar(obj, ULong))
+  {
+	tc->type = (((PyULongScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
+	return;
+  }
+  else
+  if (PyArray_IsScalar(obj, LongLong))
+  {
+	tc->type = (((PyLongLongScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
+	return;
+  }
+  else
+  if (PyArray_IsScalar(obj, ULongLong))
+  {
+	tc->type = (((PyULongLongScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
+	return;
+  }
+	return NULL;
+}
+*/
+
 static void *PyStringToUTF8(JSOBJ _obj, JSONTypeContext *tc, void *outValue, size_t *_outLen)
 {
   PyObject *obj = (PyObject *) _obj;
@@ -251,7 +327,7 @@ static char *List_iterGetName(JSOBJ obj, JSONTypeContext *tc, size_t *outLen)
 
 static char *NumpyArray_GetDType(JSOBJ obj, JSONTypeContext *tc, size_t *outLen)
 {
-	return GET_TC(tc)->npArrType;
+	return &GET_TC(tc)->npArrType;
 }
 
 
@@ -470,6 +546,55 @@ static void SetupDictIter(PyObject *dictObj, TypeContext *pc, JSONObjectEncoder 
   }
 }
 
+static int Object_flushToFile(JSONObjectEncoder *enc)
+{
+	// flush to file the data so far and reset the char buffer
+	// return true if success
+
+	char *data;
+	PyObject *pyData;
+	
+	if (!enc->writeFunction)
+		return 0;
+
+	//Add a null so we can make it a python string
+	*((enc)->offset) = '\0';
+	data = enc->start;
+	
+	pyData = PyString_FromString(data);
+
+	//Put this back
+	*((enc)->offset) = 'R';
+
+	if (pyData == NULL)
+	{
+		return 0;
+	}
+
+	//Prepare the call to file
+	PyObject *argtuple;
+	argtuple = PyTuple_Pack(1, pyData);
+	if (argtuple == NULL)
+	{
+		Py_XDECREF(pyData);
+		return 0;
+	}
+
+	//Write to file
+	PyObject * pyWriteToFile = (PyObject *)enc->writeFunction;
+	if (PyObject_CallObject(pyWriteToFile, argtuple) == NULL)
+	{
+		Py_XDECREF(pyData);
+		Py_XDECREF(argtuple);
+		return 0;
+	}
+
+	//Reset pointer
+	enc->offset = enc->start;
+	return 1;
+
+}
+
 static void Object_beginTypeContext (JSOBJ _obj, JSONTypeContext *tc, JSONObjectEncoder *enc)
 {
   PyObject *obj, *objRepr, *exc;
@@ -483,12 +608,15 @@ static void Object_beginTypeContext (JSOBJ _obj, JSONTypeContext *tc, JSONObject
 
   obj = (PyObject*) _obj;
 
-#ifdef NUMPYSUPPORT
-  if (PyArray_API == NULL)
-  {
-  	import_array();
+  if (enc->debugCallback) {
+	  //Send it for logging
+	  PyObject * pyDebugCallback = (PyObject*)enc->debugCallback;
+	  PyObject* tuple = Py_BuildValue("(O)", obj);
+	  PyObject* pyResult = PyObject_Call(pyDebugCallback, tuple, NULL);
+	  Py_DECREF(tuple);
+	  Py_XDECREF(pyResult);
+
   }
-#endif
 
 
   tc->prv = PyObject_Malloc(sizeof(TypeContext));
@@ -593,6 +721,87 @@ static void Object_beginTypeContext (JSOBJ _obj, JSONTypeContext *tc, JSONObject
     return;
   }
 #ifdef NUMPYSUPPORT
+  else 
+
+  //Boolean does not inherit from Python native
+  if (PyArray_IsScalar(obj, Bool))
+  {
+	  tc->type =(((PyBoolScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
+	  return;
+  }
+  else
+
+/* TO DO: The code below is almost there but won't bother until needed plus properly tested
+  //Double I think is different from float for numpy
+  if (PyArray_IsScalar(obj, Double))
+  {
+	  pc->PyTypeToJSON = PyNPScalarDoubleToDOUBLE; tc->type = JT_DOUBLE;
+	  return;
+  }
+
+  else
+  //This all is ok to convert to integers
+  if (PyArray_IsScalar(obj, Byte))
+  {
+	  tc->type = (((PyByteScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
+	  return;
+  }
+  else
+  if (PyArray_IsScalar(obj, UByte))
+  {
+	  tc->type = (((PyUByteScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
+	  return;
+  }
+  else
+  if (PyArray_IsScalar(obj, Short))
+  {
+	  tc->type = (((PyShortScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
+	  return;
+  }
+  else
+  if (PyArray_IsScalar(obj, UShort))
+  {
+	tc->type = (((PyUShortScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
+	return;
+  }
+  else
+  if (PyArray_IsScalar(obj, Int))
+  {
+	tc->type = (((PyIntScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
+	return;
+  }
+  else
+  if (PyArray_IsScalar(obj, UInt))
+  {
+	tc->type = (((PyUIntScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
+	return;
+  }
+  else
+  if (PyArray_IsScalar(obj, Long))
+  {
+	tc->type = (((PyLongScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
+	return;
+  }
+  else
+  if (PyArray_IsScalar(obj, ULong))
+  {
+	tc->type = (((PyULongScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
+	return;
+  }
+  else
+  if (PyArray_IsScalar(obj, LongLong))
+  {
+	tc->type = (((PyLongLongScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
+	return;
+  }
+  else
+  if (PyArray_IsScalar(obj, ULongLong))
+  {
+	tc->type = (((PyULongLongScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
+	return;
+  }
+  */
+
   else
   if (PyArray_Check(obj))
   {
@@ -611,9 +820,6 @@ static void Object_beginTypeContext (JSOBJ _obj, JSONTypeContext *tc, JSONObject
 		  goto INVALID;
 	  }
 
-	  
-	  //int pd = (PyObject *)PyArray_TYPE(obj);
-
 	  pc->iterEnd = List_iterEnd;
 	  pc->iterNext = ListFromNumpyArray_iterNext;
 	  pc->iterGetValue = List_iterGetValue;
@@ -622,7 +828,7 @@ static void Object_beginTypeContext (JSOBJ _obj, JSONTypeContext *tc, JSONObject
 	  GET_TC(tc)->index = 0;
 	  GET_TC(tc)->size = PyList_GET_SIZE((PyObject *)toListResult);
 
-	  PyArray_Descr *pd = (PyObject *)PyArray_DESCR(obj);
+	  PyArray_Descr *pd = (PyArray_Descr *)PyArray_DESCR(obj);
 	  GET_TC(tc)->npArrType = pd->kind;
 
 	  return;
@@ -838,9 +1044,17 @@ static char *Object_iterGetName(JSOBJ obj, JSONTypeContext *tc, size_t *outLen)
 {
   return GET_TC(tc)->iterGetName(obj, tc, outLen);
 }
+PyObject* _objToJSON(PyObject* self, PyObject *args, PyObject *kwargs, PyObject *pyWriteFunction);
 
 PyObject* objToJSON(PyObject* self, PyObject *args, PyObject *kwargs)
 {
+	PyObject *py = NULL;
+	return _objToJSON(self, args, kwargs, py);
+}
+
+PyObject* _objToJSON(PyObject* self, PyObject *args, PyObject *kwargs, PyObject *pyWriteFunction)
+{
+
   static char *kwlist[] = { "obj", 
 	  "ensure_ascii", 
 	  "encode_html_chars", 
@@ -848,6 +1062,8 @@ PyObject* objToJSON(PyObject* self, PyObject *args, PyObject *kwargs)
 	  "sort_keys", 
 	  "indent", 
 	  "obj_handler",
+	  "debug_callback",
+	  "flush_to_file",
 	  NULL };
 
   char buffer[65536];
@@ -860,6 +1076,7 @@ PyObject* objToJSON(PyObject* self, PyObject *args, PyObject *kwargs)
   PyObject *osortKeys = NULL;
   PyObject *tagNonLists = NULL;
   PyObject *pyObjHandler = NULL;
+  PyObject *pyDebugCallback = NULL;
 
   JSONObjectEncoder encoder =
   {
@@ -879,26 +1096,39 @@ PyObject* objToJSON(PyObject* self, PyObject *args, PyObject *kwargs)
     PyObject_Realloc,
     PyObject_Free,
     -1, //recursionMax
-    1, //forceAscii
-    0, //encodeHTMLChars
-    1, //escapeForwardSlashes
-    0, //sortKeys
-    0, //indent
+    1,  //forceAscii
+    0,  //encodeHTMLChars
+    1,  //escapeForwardSlashes
+    0,  //sortKeys
+    0,  //indent
     NULL, //prv
 	NULL, //pyObjHandler
-
+	NULL, //pyDebugCallback
+	0,    //flushToFilePeriodically
+	Object_flushToFile, //flushToFile
+	NULL, //pyWriteFunction
   };
 
 
   PRINTMARK();
 
-  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|OOOOiO", kwlist, &oinput, 
+#ifdef NUMPYSUPPORT
+  //Needed in every file that may need numpy
+  if (PyArray_API == NULL)
+  {
+	  import_array1(NULL);
+  }
+#endif
+
+  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|OOOOiOOi", kwlist, &oinput, 
 																    &oensureAscii, 
 																    &oencodeHTMLChars, 
 																    &oescapeForwardSlashes, 
 																    &osortKeys, 
 																    &encoder.indent,
-	                                                                &pyObjHandler))
+	                                                                &pyObjHandler,
+	                                                                &pyDebugCallback,
+	                                                                &encoder.flushToFilePeriodically))
   {
     return NULL;
   }
@@ -927,11 +1157,23 @@ PyObject* objToJSON(PyObject* self, PyObject *args, PyObject *kwargs)
   {
 	  encoder.objHandler = pyObjHandler;
   }
-  //if (tagNonLists != NULL && PyObject_IsTrue(tagNonLists))
-  //{
-//	  encoder.tagNonLists = 1;
- // }
 
+  if (pyDebugCallback != NULL)
+  {
+	  encoder.debugCallback = pyDebugCallback;
+  }
+
+  if (encoder.flushToFilePeriodically)
+  {
+	  if (pyWriteFunction == NULL)
+	  {
+		  encoder.flushToFilePeriodically = 0;
+	  }
+	  else {
+		  encoder.writeFunction = pyWriteFunction;
+	  }
+
+  }
 
   dconv_d2s_init(DCONV_D2S_EMIT_TRAILING_DECIMAL_POINT | DCONV_D2S_EMIT_TRAILING_ZERO_AFTER_POINT,
                  NULL, NULL, 'e', DCONV_DECIMAL_IN_SHORTEST_LOW, DCONV_DECIMAL_IN_SHORTEST_HIGH, 0, 0);
@@ -1002,7 +1244,7 @@ PyObject* objToJSONFile(PyObject* self, PyObject *args, PyObject *kwargs)
 
   argtuple = PyTuple_Pack(1, data);
 
-  string = objToJSON (self, argtuple, kwargs);
+  string = _objToJSON (self, argtuple, kwargs, write);
 
   if (string == NULL)
   {

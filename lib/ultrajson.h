@@ -171,6 +171,7 @@ enum JSTYPES
   JT_OBJECT,    // Key/Value structure
   JT_TUPLE,     // Tuples
   JT_NPARRAY,   // Numpy array
+  JT_NPSCALAR,   // Numpy scalar
   JT_INVALID,   // Internal, do not return nor expect
 };
 
@@ -272,8 +273,24 @@ typedef struct __JSONObjectEncoder
   void *prv;
 
 
-  /* */
+  /* If this function is  provided, then it will be called with the instance of objects that
+  cannot be serialized automatically*/
   void *objHandler;
+
+  /* If this function is  provided, then it will be called with the instance of objects are
+  being serialized*/
+  void *debugCallback;
+
+  /* */
+  int flushToFilePeriodically;
+
+  /* */
+  int (*flushToFile)(struct __JSONObjectEncoder *enc);
+
+  /* */
+  void *writeFunction;
+
+
 
   /*
   Set to an error message if error occured */

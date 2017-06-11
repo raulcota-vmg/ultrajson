@@ -114,11 +114,37 @@ FIXME: Keep track of how big these get across several encoder calls and try to m
 That way we won't run our head into the wall each call */
 static void Buffer_Realloc (JSONObjectEncoder *enc, size_t cbNeeded)
 {
-  size_t curSize = enc->end - enc->start;
+
+	size_t curSize = enc->end - enc->start; //Allocated size
+	size_t curUsedSize = curSize;           //Size of used char
+
+	//Check if it should flush to file
+	int flushedToFile = 0;
+	if (enc->flushToFilePeriodically) {
+		//flush to file as opposed to allocating more memory
+		flushedToFile = enc->flushToFile(enc);
+
+		if (flushedToFile)
+			//Reset this
+			curUsedSize = 0;
+
+		if (curSize > (cbNeeded + 1000))
+		{
+			//Good to go. Compare + 1000 to be safe
+			return;
+		}
+		else {
+			int i = 0;
+		}
+	}
+
+
+
+  
   size_t newSize = curSize * 2;
   size_t offset = enc->offset - enc->start;
 
-  while (newSize < curSize + cbNeeded)
+  while (newSize < curUsedSize + cbNeeded)
   {
     newSize *= 2;
   }
@@ -488,18 +514,19 @@ static int Buffer_EscapeStringValidated (JSOBJ obj, JSONObjectEncoder *enc, cons
   }
 }
 
+//Always allocate one extra to make sure we have space for a null terminator
 #define Buffer_Reserve(__enc, __len) \
-    if ( (size_t) ((__enc)->end - (__enc)->offset) < (size_t) (__len))  \
+    if ( (size_t) ((__enc)->end - (__enc)->offset) < (size_t) (__len+1))  \
     {   \
-      Buffer_Realloc((__enc), (__len));\
+      Buffer_Realloc((__enc), (__len+1));\
     }   \
 
-#define Buffer_AppendCharUnchecked(__enc, __chr) \
-                *((__enc)->offset++) = __chr; \
-
 //#define Buffer_AppendCharUnchecked(__enc, __chr) \
-             //  { assert( ((__enc)->end - (__enc)->offset - 1) > 0) ;\
-             //   *((__enc)->offset++) = __chr; }\
+//                *((__enc)->offset++) = __chr; \
+
+#define Buffer_AppendCharUnchecked(__enc, __chr) \
+               { assert( ((__enc)->end - (__enc)->offset - 1) > 0) ;\
+                *((__enc)->offset++) = __chr; }\
 
 static FASTCALL_ATTR INLINE_PREFIX void FASTCALL_MSVC strreverse(char* begin, char* end)
 {
@@ -613,9 +640,12 @@ static void encode(JSOBJ obj, JSONObjectEncoder *enc, const char *name, size_t c
 
   length of _name as encoded worst case +
   maxLength of double to string OR maxLength of JSLONG to string
-  */
 
-  Buffer_Reserve(enc, 256 + RESERVE_STRING(cbName));
+  add also the size of indent. It should never grow this big but avoids crashes
+  if mistakes and infinite loops trigger and crashes heere before max recursion is noticed
+  */
+  int indentSize = enc->level * enc->indent;
+  Buffer_Reserve(enc, 256 + indentSize + RESERVE_STRING(cbName));
   if (enc->errorMsg)
   {
     return;
@@ -701,17 +731,18 @@ static void encode(JSOBJ obj, JSONObjectEncoder *enc, const char *name, size_t c
 		count = 0;
 
 		// Special handling
-		char * ptr;
-		const char objOpen[] = "{\"__type__\": \"__ndarray__\", \"dtype\":\"";
+		const char * ptr;
+		const char objOpen[] = "{\".type\": \".ndarr\", \"dtype\":\"";
 		for (ptr = objOpen; ptr[0] != '\0'; ptr++) {
 			Buffer_AppendCharUnchecked(enc, ptr[0]);
 		}
 
 		char dtype = 'f';
-		dtype = enc->iterGetName(obj, &tc, 1);
+		size_t nameLen = 1;
+		dtype = *(enc->iterGetName(obj, &tc, &nameLen));
 		Buffer_AppendCharUnchecked(enc, dtype);
 
-		const char objOpen2[] = "\", \"content\": ";
+		const char objOpen2[] = "\", \".content\": ";
 		for (ptr = objOpen2; ptr[0] != '\0'; ptr++) {
 			Buffer_AppendCharUnchecked(enc, ptr[0]);
 		}
@@ -756,8 +787,9 @@ static void encode(JSOBJ obj, JSONObjectEncoder *enc, const char *name, size_t c
 
 		//if (enc->tagNonLists && )
 		// Special handling
-		const char objOpen[] = "{\"__type__\": \"__tuple__\", \"content\": ";
-		for (char* ptr = objOpen; ptr[0] != '\0'; ptr++) {
+		const char * ptr;
+		const char objOpen[] = "{\".type\": \".tuple\", \".content\": ";
+		for (ptr = objOpen; ptr[0] != '\0'; ptr++) {
 			Buffer_AppendCharUnchecked(enc, ptr[0]);
 		}
 
