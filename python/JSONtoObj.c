@@ -113,13 +113,87 @@ static void Object_releaseObject(void *prv, JSOBJ obj)
   Py_DECREF( ((PyObject *)obj));
 }
 
-static char *g_kwlist[] = {"obj", NULL};
+static void Object_readNextSection(JSONObjectDecoder *dec, const char ** buffer, size_t *cbBuffer)
+{
+  //Read the next section from the file for decoding
+
+
+  //Pointer to read function
+  PyObject *pyReadFunction = (PyObject *)dec->readFunction;
+
+
+  //Section that will be read
+  PyObject *pySection = NULL;
+  PyObject *pyTemp = NULL;
+
+  //Remove and decref old python string if needed
+  Py_CLEAR(dec->currentSection);
+
+  //Clear this
+  *cbBuffer = 0;
+
+  //Read a specific set of characters
+  PyObject *pyReadSize = PyInt_FromSize_t(dec->streamFromFile);
+  PyObject *tuple = Py_BuildValue("(O)", pyReadSize);
+  pySection = PyObject_CallObject(pyReadFunction, tuple);
+
+  Py_XDECREF(pyReadSize);
+  Py_XDECREF(tuple);
+  if (pySection == NULL)
+  {
+    return;
+  }
+
+  // Validate the string
+  if (!PyString_Check(pySection))
+  {
+    if (PyUnicode_Check(pySection))
+    {
+      pyTemp = pySection;
+      pySection = PyUnicode_AsUTF8String(pyTemp);
+      if (pySection == NULL)
+      {
+        //Exception raised above us by codec according to docs
+        Py_XDECREF(pyTemp);
+        return;
+      }
+    }
+    else
+    {
+      Py_XDECREF(pySection);
+      PyErr_Format(PyExc_TypeError, "Expected String or Unicode");
+      return;
+    }
+  }
+
+  //Keep track of it
+  const char * temp = PyString_AS_STRING(pySection);
+  *buffer = temp;
+  *cbBuffer = PyString_GET_SIZE(pySection);
+  dec->currentSection = pySection;
+
+
+}
+
+static char *g_kwlist[] = {"obj", 
+						"stream_from_file",
+						NULL};
+
+
+PyObject* _JSONToObj(PyObject* self, PyObject *args, PyObject *kwargs, PyObject *pyReadFunction);
 
 PyObject* JSONToObj(PyObject* self, PyObject *args, PyObject *kwargs)
 {
-  PyObject *ret;
-  PyObject *sarg;
-  PyObject *arg;
+	PyObject *py = NULL;
+	return _JSONToObj(self, args, kwargs, py);
+}
+
+PyObject* _JSONToObj(PyObject* self, PyObject *args, PyObject *kwargs, PyObject *pyReadFunction)
+{
+  PyObject *ret = NULL;
+  PyObject *sarg = NULL;
+  PyObject *arg = NULL;
+  
   JSONObjectDecoder decoder =
   {
     Object_newString,
@@ -137,48 +211,82 @@ PyObject* JSONToObj(PyObject* self, PyObject *args, PyObject *kwargs)
     Object_releaseObject,
     PyObject_Malloc,
     PyObject_Free,
-    PyObject_Realloc
+    PyObject_Realloc,
+    0,
+    NULL,
+    Object_readNextSection,
+    NULL
   };
 
   decoder.prv = NULL;
 
-  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O", g_kwlist, &arg))
+  int streamFromFile;
+
+  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|i", g_kwlist, &arg, &(streamFromFile)))
+  //if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O", g_kwlist, &arg))
   {
       return NULL;
   }
 
-  if (PyString_Check(arg))
-  {
-      sarg = arg;
+
+  if (streamFromFile) {
+    //Must have a file to stream it
+    if (!pyReadFunction)
+      streamFromFile = 0;
   }
-  else
-  if (PyUnicode_Check(arg))
-  {
-    sarg = PyUnicode_AsUTF8String(arg);
-    if (sarg == NULL)
-    {
-      //Exception raised above us by codec according to docs
-      return NULL;
+
+  if (streamFromFile) {
+    //Configure for live file reading
+    decoder.streamFromFile = (size_t)streamFromFile;
+    decoder.readFunction = pyReadFunction;
+    if (decoder.streamFromFile < 2) {
+      //Just use a default value
+      decoder.streamFromFile = 80000;
     }
   }
-  else
-  {
-    PyErr_Format(PyExc_TypeError, "Expected String or Unicode");
-    return NULL;
+
+  else {
+    // Validate the string
+    if (PyString_Check(arg))
+    {
+      sarg = arg;
+    }
+    else
+      if (PyUnicode_Check(arg))
+      {
+        sarg = PyUnicode_AsUTF8String(arg);
+        if (sarg == NULL)
+        {
+          //Exception raised above us by codec according to docs
+          return NULL;
+        }
+      }
+      else
+      {
+        PyErr_Format(PyExc_TypeError, "Expected String or Unicode");
+        return NULL;
+      }
+
   }
+
 
   decoder.errorStr = NULL;
   decoder.errorOffset = NULL;
 
   dconv_s2d_init(DCONV_S2D_ALLOW_TRAILING_JUNK, 0.0, 0.0, "Infinity", "NaN");
 
-  ret = JSON_DecodeObject(&decoder, PyString_AS_STRING(sarg), PyString_GET_SIZE(sarg));
+  if (decoder.streamFromFile) {
+    ret = JSON_DecodeObject(&decoder, NULL, 0);
+  }
+  else {
+    ret = JSON_DecodeObject(&decoder, PyString_AS_STRING(sarg), PyString_GET_SIZE(sarg));
+  }
 
   dconv_s2d_free();
 
   if (sarg != arg)
   {
-    Py_DECREF(sarg);
+    Py_XDECREF(sarg);
   }
 
   if (decoder.errorStr)
@@ -201,13 +309,15 @@ PyObject* JSONToObj(PyObject* self, PyObject *args, PyObject *kwargs)
 
 PyObject* JSONFileToObj(PyObject* self, PyObject *args, PyObject *kwargs)
 {
-  PyObject *read;
-  PyObject *string;
-  PyObject *result;
+  PyObject *read = NULL;
+  PyObject *string = NULL;
+  PyObject *result = NULL;
   PyObject *file = NULL;
-  PyObject *argtuple;
+  PyObject *argtuple = NULL;
+  int streamFromFile;
 
-  if (!PyArg_ParseTuple (args, "O", &file))
+  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|i", g_kwlist, &file, &streamFromFile))
+  //if (!PyArg_ParseTuple (args, "O", &file))
   {
     return NULL;
   }
@@ -226,20 +336,32 @@ PyObject* JSONFileToObj(PyObject* self, PyObject *args, PyObject *kwargs)
     return NULL;
   }
 
-  string = PyObject_CallObject (read, NULL);
-  Py_XDECREF(read);
+  if (streamFromFile) {
+	  //Don't read the entire string
 
-  if (string == NULL)
-  {
-    return NULL;
+    result = _JSONToObj(self, args, kwargs, read);
+
+    Py_XDECREF(read);
+
   }
+  else{
+	  string = PyObject_CallObject (read, NULL);
+    Py_XDECREF(read);
+	  if (string == NULL)
+	  {
+		    return NULL;
+	  }
 
-  argtuple = PyTuple_Pack(1, string);
+    //Flip argument to to be the 
+	  argtuple = PyTuple_Pack(1, string);
 
-  result = JSONToObj (self, argtuple, kwargs);
+    result = _JSONToObj (self, argtuple, kwargs, NULL);
+    Py_XDECREF(argtuple);
 
-  Py_XDECREF(argtuple);
-  Py_XDECREF(string);
+    Py_XDECREF(string);
+
+  }
+  
 
   if (result == NULL) {
     return NULL;

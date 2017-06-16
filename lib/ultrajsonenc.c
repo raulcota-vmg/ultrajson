@@ -832,6 +832,7 @@ static void encode(JSOBJ obj, JSONObjectEncoder *enc, const char *name, size_t c
       Buffer_AppendCharUnchecked (enc, '{');
       Buffer_AppendIndentNewlineUnchecked (enc);
 
+
       while ((res = enc->iterNext(obj, &tc)))
       {
         if(res < 0)
@@ -858,6 +859,7 @@ static void encode(JSOBJ obj, JSONObjectEncoder *enc, const char *name, size_t c
         Buffer_AppendIndentUnchecked (enc, enc->level);
         encode (iterObj, enc, objName, szlen);
         count ++;
+
       }
 
       enc->iterEnd(obj, &tc);

@@ -339,51 +339,69 @@ static char *NumpyArray_GetDType(JSOBJ obj, JSONTypeContext *tc, size_t *outLen)
 
 static int Dict_iterNext(JSOBJ obj, JSONTypeContext *tc)
 {
-#if PY_MAJOR_VERSION >= 3
+  
   PyObject* itemNameTmp;
-#endif
+  PyObject* itemValueTmp;
 
-  if (GET_TC(tc)->itemName)
-  {
-    Py_DECREF(GET_TC(tc)->itemName);
-    GET_TC(tc)->itemName = NULL;
-  }
+  //Clear previous iteration
+  Py_CLEAR(GET_TC(tc)->itemName);
+  Py_CLEAR(GET_TC(tc)->itemValue);
 
-  if (!(GET_TC(tc)->itemName = PyIter_Next(GET_TC(tc)->iterator)))
-  {
-    PRINTMARK();
-    return 0;
-  }
 
-  if (!(GET_TC(tc)->itemValue = PyObject_GetItem(GET_TC(tc)->dictObj, GET_TC(tc)->itemName)))
+  //Get the item name and value. Quit if cannot
+  itemNameTmp = PyIter_Next(GET_TC(tc)->iterator);
+  if (!itemNameTmp)
   {
     PRINTMARK();
     return 0;
   }
 
-  if (PyUnicode_Check(GET_TC(tc)->itemName))
+	itemValueTmp = PyObject_GetItem(GET_TC(tc)->dictObj, itemNameTmp);
+  if (!itemValueTmp)
   {
-    GET_TC(tc)->itemName = PyUnicode_AsUTF8String (GET_TC(tc)->itemName);
+    Py_CLEAR(itemNameTmp);
+    PRINTMARK();
+    return 0;
+  }
+
+  //Assign value directly
+  GET_TC(tc)->itemValue = itemValueTmp;
+
+
+  //Now deal with the name. Make sure it becomes a non unicode string
+  if (PyUnicode_Check(itemNameTmp))
+  {
+    //Encode, assign and decref of tmp
+    GET_TC(tc)->itemName = PyUnicode_AsUTF8String (itemNameTmp);
+    Py_CLEAR(itemNameTmp);
   }
   else
-  if (!PyString_Check(GET_TC(tc)->itemName))
+  if (!PyString_Check(itemNameTmp))
   {
-    if (UNLIKELY(GET_TC(tc)->itemName == Py_None))
+    if (UNLIKELY(itemNameTmp == Py_None))
     {
+      //None is special. Sort it out directly, assign and deref of tmp
       GET_TC(tc)->itemName = PyString_FromString("null");
-      return 1;
+      Py_CLEAR(itemNameTmp);
     }
+    else {
+      //Get blind string representation, assign and deref of tmp
+      GET_TC(tc)->itemName = PyObject_Str(itemNameTmp);
+      Py_CLEAR(itemNameTmp);
 
-    GET_TC(tc)->itemName = PyObject_Str(GET_TC(tc)->itemName);
 #if PY_MAJOR_VERSION >= 3
-    itemNameTmp = GET_TC(tc)->itemName;
-    GET_TC(tc)->itemName = PyUnicode_AsUTF8String (GET_TC(tc)->itemName);
-    Py_DECREF(itemNameTmp);
+      //Python 3 comes out as unicode. Same drill
+      //Encode, assign and decref of tmp
+      itemNameTmp = GET_TC(tc)->itemName;
+      GET_TC(tc)->itemName = PyUnicode_AsUTF8String(itemNameTmp);
+      Py_CLEAR(itemNameTmp);
 #endif
+    }
   }
   else
   {
-    Py_INCREF(GET_TC(tc)->itemName);
+    //Assume is a string. Just assign as is. Leave ref count as it
+    GET_TC(tc)->itemName = itemNameTmp;
   }
   PRINTMARK();
   return 1;
@@ -391,11 +409,9 @@ static int Dict_iterNext(JSOBJ obj, JSONTypeContext *tc)
 
 static void Dict_iterEnd(JSOBJ obj, JSONTypeContext *tc)
 {
-  if (GET_TC(tc)->itemName)
-  {
-    Py_DECREF(GET_TC(tc)->itemName);
-    GET_TC(tc)->itemName = NULL;
-  }
+	Py_CLEAR(GET_TC(tc)->itemName);
+	Py_CLEAR(GET_TC(tc)->itemValue);
+
   Py_CLEAR(GET_TC(tc)->iterator);
   Py_DECREF(GET_TC(tc)->dictObj);
   PRINTMARK();
@@ -729,9 +745,10 @@ static void Object_beginTypeContext (JSOBJ _obj, JSONTypeContext *tc, JSONObject
 	  tc->type =(((PyBoolScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
 	  return;
   }
-  else
 
 /* TO DO: The code below is almost there but won't bother until needed plus properly tested
+
+  else
   //Double I think is different from float for numpy
   if (PyArray_IsScalar(obj, Double))
   {
@@ -902,7 +919,7 @@ ISITERABLE:
   }
   if (enc->objHandler)
   {
-	  //PyObject* toDictResult = PyObject_GetAttrString(obj, "__dict__");
+    //A generic handler was provided. Just send it there and hope for the best
 	  PyObject * pyObjHandler = (PyObject*)enc->objHandler;
 	  PyObject* tuple = Py_BuildValue("(O)", obj);
 	  PyObject* toDictResult = PyObject_Call(pyObjHandler, tuple, NULL);
@@ -982,6 +999,10 @@ static void Object_endTypeContext(JSOBJ obj, JSONTypeContext *tc)
 	  Py_XDECREF(GET_TC(tc)->attrList);
   }
 
+  if (tc->type == JT_RAW)
+  {
+    Py_XDECREF(GET_TC(tc)->rawJSONValue);
+  }
 
   PyObject_Free(tc->prv);
   tc->prv = NULL;
@@ -1219,6 +1240,7 @@ PyObject* objToJSONFile(PyObject* self, PyObject *args, PyObject *kwargs)
   PyObject *string;
   PyObject *write;
   PyObject *argtuple;
+  PyObject *write_result;
 
   PRINTMARK();
 
@@ -1261,13 +1283,16 @@ PyObject* objToJSONFile(PyObject* self, PyObject *args, PyObject *kwargs)
     Py_XDECREF(write);
     return NULL;
   }
-  if (PyObject_CallObject (write, argtuple) == NULL)
+
+  write_result = PyObject_CallObject(write, argtuple);
+  if (write_result == NULL)
   {
     Py_XDECREF(write);
     Py_XDECREF(argtuple);
     return NULL;
   }
 
+  Py_XDECREF(write_result);
   Py_XDECREF(write);
   Py_DECREF(argtuple);
   Py_XDECREF(string);

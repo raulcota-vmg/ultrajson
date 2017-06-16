@@ -328,6 +328,8 @@ JSONObjectEncoder.free or free() as specified when calling this function.
 */
 EXPORTFUNCTION char *JSON_EncodeObject(JSOBJ obj, JSONObjectEncoder *enc, char *buffer, size_t cbBuffer);
 
+struct __JSONObjectDecoder;
+
 typedef struct __JSONObjectDecoder
 {
   JSOBJ (*newString)(void *prv, wchar_t *start, wchar_t *end);
@@ -346,6 +348,19 @@ typedef struct __JSONObjectDecoder
   JSPFN_MALLOC malloc;
   JSPFN_FREE free;
   JSPFN_REALLOC realloc;
+
+  /* > 1 if should gradually parse file as opposed to loading it whole in one shot
+  value is the chunk that it should read per attempt. Use 1 for a default value*/
+  size_t streamFromFile;
+
+  /*Function used to do the read from file*/
+  void *readFunction;
+  
+  /*Function to perform the buffered read*/
+  void (*readNextSection)(struct __JSONObjectDecoder *dec, const char **buffer, size_t *cbBuffer);
+
+  void *currentSection;
+
   char *errorStr;
   char *errorOffset;
   void *prv;

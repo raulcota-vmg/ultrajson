@@ -733,6 +733,35 @@ static FASTCALL_ATTR JSOBJ FASTCALL_MSVC decode_any(struct DecoderState *ds)
   }
 }
 
+static void stepDecoderState(struct DecoderState *ds) {
+  //Move the pointer of the character one up but
+  //first check if file section should be read again if streaming
+  if (ds->dec->streamFromFile) readNextSectionIfNeeded(ds);
+  else ds->start++;
+
+}
+
+static void readNextSectionIfNeeded(struct DecoderState *ds) {
+  //Update pointers of decoder state if they have ran their course through their 
+  //last section from reading the file stream
+
+  if (ds->start < ds->end)
+    //All good still
+    return;
+
+  const char *buffer;
+  size_t cbBufferFromFile;
+  ds->dec->readNextSection(ds->dec, &buffer, &cbBufferFromFile);
+
+  if (!cbBufferFromFile)
+    //Don't touch it
+    return;
+
+  ds->start = (char *)buffer;
+  ds->end = ds->start + cbBufferFromFile;
+
+}
+
 JSOBJ JSON_DecodeObject(JSONObjectDecoder *dec, const char *buffer, size_t cbBuffer)
 {
   /*
@@ -740,20 +769,38 @@ JSOBJ JSON_DecodeObject(JSONObjectDecoder *dec, const char *buffer, size_t cbBuf
   struct DecoderState ds;
   wchar_t escBuffer[(JSON_MAX_STACK_BUFFER_SIZE / sizeof(wchar_t))];
   JSOBJ ret;
+  
+  ds.dec = dec;
+  ds.start = NULL;
+  ds.end = NULL;
 
-  ds.start = (char *) buffer;
-  ds.end = ds.start + cbBuffer;
+  if (!buffer) {
+    //Streaming
+    readNextSectionIfNeeded(&ds);
+    /*size_t cbBufferFromFile;
+    dec->readNextSection(dec, &buffer, &cbBufferFromFile);
+    cbBuffer = cbBufferFromFile;
+
+    ds.start = (char *)buffer;
+    ds.end = ds.start + cbBuffer;
+    */
+  }
+  else {
+    ds.start = (char *)buffer;
+    ds.end = ds.start + cbBuffer;
+
+  }
+
 
   ds.escStart = escBuffer;
   ds.escEnd = ds.escStart + (JSON_MAX_STACK_BUFFER_SIZE / sizeof(wchar_t));
   ds.escHeap = 0;
   ds.prv = dec->prv;
-  ds.dec = dec;
+  
   ds.dec->errorStr = NULL;
   ds.dec->errorOffset = NULL;
   ds.objDepth = 0;
 
-  ds.dec = dec;
 
   ret = decode_any (&ds);
 
