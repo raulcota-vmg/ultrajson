@@ -113,7 +113,9 @@ static void Object_releaseObject(void *prv, JSOBJ obj)
   Py_DECREF( ((PyObject *)obj));
 }
 
-static void Object_readNextSection(JSONObjectDecoder *dec, const char ** buffer, size_t *cbBuffer, char * location, int doStep)
+static void Object_readNextSection(JSONObjectDecoder *dec, 
+                                  const char ** buffer, size_t *cbBuffer, 
+                                  char * location, int doStep, int * atEOF)
 {
   //Read the next section from the file for decoding
 
@@ -219,6 +221,10 @@ static void Object_readNextSection(JSONObjectDecoder *dec, const char ** buffer,
   temp += offset;
   *buffer = temp;
   *cbBuffer = ( PyString_GET_SIZE(pySection) - offset );
+
+  if (*cbBuffer < dec->streamFromFile)
+    *atEOF = 1;
+
   dec->currentSection = pySection;
 
 

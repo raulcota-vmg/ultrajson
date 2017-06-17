@@ -357,7 +357,7 @@ typedef struct __JSONObjectDecoder
   void *readFunction;
   
   /*Function to perform the buffered read*/
-  void (*readNextSection)(struct __JSONObjectDecoder *dec, const char ** buffer, size_t *cbBuffer, char * location, int doStep);
+  void (*readNextSection)(struct __JSONObjectDecoder *dec, const char ** buffer, size_t *cbBuffer, char * location, int doStep, int *atEOF);
 
   void *currentSection;
 

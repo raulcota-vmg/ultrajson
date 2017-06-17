@@ -65,10 +65,11 @@ struct DecoderState
   JSUINT32 objDepth;
   void *prv;
   JSONObjectDecoder *dec;
+  int atEOF;
 };
 
 static void stepDecoderState(struct DecoderState *ds);
-static void readNextSectionIfNeeded(struct DecoderState *ds);
+static void readNextSectionIfNeeded(struct DecoderState *ds, size_t forceContiguous, int doStep);
 
 
 static JSOBJ FASTCALL_MSVC decode_any( struct DecoderState *ds) FASTCALL_ATTR;
@@ -782,7 +783,7 @@ static void readNextSectionIfNeeded(struct DecoderState *ds, size_t forceContigu
 
   //If from my location + number of contiguous characters needed + step
   //puts me at end or beyond (end is the null terminator). Then I need to read more from file
-  if ( (ds->start + forceContiguous + doStep) < ds->end) {
+  if ( (ds->atEOF) || ((ds->start + forceContiguous + doStep) < ds->end) ) {
     //All good still
     if (doStep)
       ds->start+= doStep;
@@ -792,8 +793,9 @@ static void readNextSectionIfNeeded(struct DecoderState *ds, size_t forceContigu
 
   const char *buffer;
   size_t bufferSize;
-  ds->dec->readNextSection(ds->dec, &buffer, &bufferSize, ds->start, doStep);
-
+  int atEOF = 0;
+  ds->dec->readNextSection(ds->dec, &buffer, &bufferSize, ds->start, doStep, &atEOF);
+  ds->atEOF = atEOF;
   //if (!bufferSize)
   //  //Don't touch it
   //  return;
@@ -814,6 +816,7 @@ JSOBJ JSON_DecodeObject(JSONObjectDecoder *dec, const char *buffer, size_t cbBuf
   ds.dec = dec;
   ds.start = NULL;
   ds.end = NULL;
+  ds.atEOF = 0;
 
   if (!buffer) {
     //Streaming
