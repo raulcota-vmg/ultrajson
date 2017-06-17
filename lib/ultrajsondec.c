@@ -54,6 +54,7 @@ http://www.opensource.apple.com/source/tcl/tcl-14/tcl/license.terms
 #define NULL 0
 #endif
 
+
 struct DecoderState
 {
   char *start;
@@ -65,7 +66,7 @@ struct DecoderState
   JSUINT32 objDepth;
   void *prv;
   JSONObjectDecoder *dec;
-  int atEOF;
+  int atEOF; //Indicates if at end of file while streaming
 };
 
 static void stepDecoderState(struct DecoderState *ds);
@@ -102,7 +103,7 @@ static FASTCALL_ATTR JSOBJ FASTCALL_MSVC decode_numeric (struct DecoderState *ds
 
   //force a bunch of contiguous characters without stepping
   //that for sure will fit any possible number
-  readNextSectionIfNeeded(ds, 30, 0);
+  readNextSectionIfNeeded(ds, FORCE_CONTIGUOUS_NUMERIC, 0);
 
   //now is safe to use offset
   char *offset = ds->start;
@@ -376,7 +377,7 @@ static FASTCALL_ATTR JSOBJ FASTCALL_MSVC decode_string ( struct DecoderState *ds
 
 
   //force a bunch of contiguous characters without stepping
-  readNextSectionIfNeeded(ds, 10, 0);
+  readNextSectionIfNeeded(ds, FORCE_CONTIGUOUS_STRING, 0);
 
   inputOffset = (JSUINT8 *) ds->start;
 
@@ -837,28 +838,34 @@ JSOBJ JSON_DecodeObject(JSONObjectDecoder *dec, const char *buffer, size_t cbBuf
   ds.atEOF = 0;
 
   if (!buffer) {
-    //Streaming
+    //Streaming. Load the first section
     readNextSectionIfNeeded(&ds, 0, 0);
 
   }
   else {
+    //Entire string is known a priori
     ds.start = (char *)buffer;
     ds.end = ds.start + cbBuffer;
 
   }
 
-
+  //Unicode strings are loaded into this
   ds.escStart = escBuffer;
   ds.escEnd = ds.escStart + (JSON_MAX_STACK_BUFFER_SIZE / sizeof(wchar_t));
   ds.escHeap = 0;
   ds.prv = dec->prv;
   
+
   ds.dec->errorStr = NULL;
   ds.dec->errorOffset = NULL;
   ds.objDepth = 0;
 
-
+  //The bulk of the work happens inside this function
   ret = decode_any (&ds);
+
+
+  //Make sure we clean this up
+
 
   if (ds.escHeap)
   {
@@ -867,6 +874,7 @@ JSOBJ JSON_DecodeObject(JSONObjectDecoder *dec, const char *buffer, size_t cbBuf
 
   if (!(dec->errorStr))
   {
+    //Not at the end of the string. 
     if ((ds.end - ds.start) > 0)
     {
       SkipWhitespace(&ds);

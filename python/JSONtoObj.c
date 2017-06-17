@@ -294,9 +294,11 @@ PyObject* _JSONToObj(PyObject* self, PyObject *args, PyObject *kwargs, PyObject 
     //Configure for live file reading
     decoder.streamFromFile = (size_t)streamFromFile;
     decoder.readFunction = pyReadFunction;
-    if (decoder.streamFromFile < 2) {
+
+    //Make sure the section size is big enough. No need to be shy here
+    if (decoder.streamFromFile < (FORCE_CONTIGUOUS_STRING + FORCE_CONTIGUOUS_NUMERIC)) {
       //Just use a default value
-      decoder.streamFromFile = 80000;
+      decoder.streamFromFile = DEFAULT_STREAM_SIZE;
     }
   }
 
