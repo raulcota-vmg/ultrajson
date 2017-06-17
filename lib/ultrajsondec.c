@@ -74,6 +74,7 @@ struct DecoderState
 class SmartBufferPointer {
     public:
     SmartBufferPointer(DecoderState* ds) : _ds(ds) { _offset = _ds->start; }
+    void Reassign(DecoderState* ds) { _ds = ds; _offset = _ds->start; }
     char* operator()() { return _offset; }
     operator char* ()  { return _offset; }
     SmartBufferPointer& operator++() 
@@ -447,7 +448,7 @@ static FASTCALL_ATTR JSOBJ FASTCALL_MSVC decode_string ( struct DecoderState *ds
     readNextSectionIfNeeded(ds, 10, 0);
 
     //Re assign
-    inputOffset = (JSUINT8 *)ds->start;
+    inputOffset.Reassign(ds);
 
     switch (g_decoderLookup[(JSUINT8)(*inputOffset)])
     {
