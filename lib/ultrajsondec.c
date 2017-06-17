@@ -185,40 +185,53 @@ BREAK_INT_LOOP:
 
 static FASTCALL_ATTR JSOBJ FASTCALL_MSVC decode_true ( struct DecoderState *ds)
 {
-  char *offset = ds->start;
-  offset ++;
+  //Start moving one forward and check every character
+  stepDecoderState(ds);
+  if (*(ds->start) != 'r')
+    goto SETERROR;
 
-  if (*(offset++) != 'r')
+  stepDecoderState(ds);
+  if (*(ds->start) != 'u')
     goto SETERROR;
-  if (*(offset++) != 'u')
+
+  stepDecoderState(ds);
+  if (*(ds->start) != 'e')
     goto SETERROR;
-  if (*(offset++) != 'e')
-    goto SETERROR;
+  
+  //One last step
+  stepDecoderState(ds);
 
   ds->lastType = JT_TRUE;
-  ds->start = offset;
   return ds->dec->newTrue(ds->prv);
 
 SETERROR:
+  stepDecoderState(ds); //Mute to step but do it anyway to stay consistent with old code
   return SetError(ds, -1, "Unexpected character found when decoding 'true'");
 }
 
 static FASTCALL_ATTR JSOBJ FASTCALL_MSVC decode_false ( struct DecoderState *ds)
 {
-  char *offset = ds->start;
-  offset ++;
+  //Start moving one forward and check every character
+  stepDecoderState(ds);
+  if (*(ds->start) != 'a')
+    goto SETERROR;
 
-  if (*(offset++) != 'a')
+  stepDecoderState(ds);
+  if (*(ds->start) != 'l')
     goto SETERROR;
-  if (*(offset++) != 'l')
+
+  stepDecoderState(ds);
+  if (*(ds->start) != 's')
     goto SETERROR;
-  if (*(offset++) != 's')
+
+  stepDecoderState(ds);
+  if (*(ds->start) != 'e')
     goto SETERROR;
-  if (*(offset++) != 'e')
-    goto SETERROR;
+
+  //One last step
+  stepDecoderState(ds);
 
   ds->lastType = JT_FALSE;
-  ds->start = offset;
   return ds->dec->newFalse(ds->prv);
 
 SETERROR:
@@ -227,18 +240,22 @@ SETERROR:
 
 static FASTCALL_ATTR JSOBJ FASTCALL_MSVC decode_null ( struct DecoderState *ds)
 {
-  char *offset = ds->start;
-  offset ++;
+  stepDecoderState(ds);
+  if (*(ds->start) != 'u')
+    goto SETERROR;
 
-  if (*(offset++) != 'u')
+  stepDecoderState(ds);
+  if (*(ds->start) != 'l')
     goto SETERROR;
-  if (*(offset++) != 'l')
+
+  stepDecoderState(ds);
+  if (*(ds->start) != 'l')
     goto SETERROR;
-  if (*(offset++) != 'l')
-    goto SETERROR;
+
+  stepDecoderState(ds);
+
 
   ds->lastType = JT_NULL;
-  ds->start = offset;
   return ds->dec->newNull(ds->prv);
 
 SETERROR:
