@@ -81,6 +81,20 @@ Dictates and limits how much stack space for buffers UltraJSON will use before r
 #define JSON_MAX_STACK_BUFFER_SIZE 131072
 #endif
 
+
+//Size of contiguous memory of char * to comfortably decode any number
+//no need to be shy on this number
+#define FORCE_CONTIGUOUS_NUMERIC 30
+
+//Size of contiguous memory of char * to comfortably decode unicode characters
+//no need to be shy on this number
+#define FORCE_CONTIGUOUS_STRING 10
+
+//Default size of character chunks (sections) read from file when
+//streaming the file
+#define DEFAULT_STREAM_SIZE 80000
+
+
 #ifdef _WIN32
 
 typedef __int64 JSINT64;
