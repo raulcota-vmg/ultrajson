@@ -28,7 +28,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\lib\dconv_wrapper.cc" />
-    <ClCompile Include="..\..\lib\ultrajsondec.cpp">
+    <ClCompile Include="..\..\lib\ultrajsondec.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='ReleaseNoOpt|Win32'">CompileAsCpp</CompileAs>
     </ClCompile>
     <ClCompile Include="..\..\lib\ultrajsonenc.c">
