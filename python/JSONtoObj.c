@@ -206,6 +206,8 @@ static void Object_readNextSection(JSONObjectDecoder *dec,
     }
   }
 
+  if (PyString_GET_SIZE(pySection) < dec->streamFromFile)
+    *atEOF = 1;
 
   if (concatenate) {
     //Put them together. pySection will decrease its ref count
@@ -222,8 +224,6 @@ static void Object_readNextSection(JSONObjectDecoder *dec,
   *buffer = temp;
   *cbBuffer = ( PyString_GET_SIZE(pySection) - offset );
 
-  if (*cbBuffer < dec->streamFromFile)
-    *atEOF = 1;
 
   dec->currentSection = pySection;
 
@@ -294,9 +294,11 @@ PyObject* _JSONToObj(PyObject* self, PyObject *args, PyObject *kwargs, PyObject 
     //Configure for live file reading
     decoder.streamFromFile = (size_t)streamFromFile;
     decoder.readFunction = pyReadFunction;
-    if (decoder.streamFromFile < 2) {
+
+    //Make sure the section size is big enough. No need to be shy here
+    if (decoder.streamFromFile < (FORCE_CONTIGUOUS_STRING + FORCE_CONTIGUOUS_NUMERIC)) {
       //Just use a default value
-      decoder.streamFromFile = 80000;
+      decoder.streamFromFile = DEFAULT_STREAM_SIZE;
     }
   }
 
