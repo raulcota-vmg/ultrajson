@@ -206,6 +206,8 @@ static void Object_readNextSection(JSONObjectDecoder *dec,
     }
   }
 
+  if (PyString_GET_SIZE(pySection) < dec->streamFromFile)
+    *atEOF = 1;
 
   if (concatenate) {
     //Put them together. pySection will decrease its ref count
@@ -222,8 +224,6 @@ static void Object_readNextSection(JSONObjectDecoder *dec,
   *buffer = temp;
   *cbBuffer = ( PyString_GET_SIZE(pySection) - offset );
 
-  if (*cbBuffer < dec->streamFromFile)
-    *atEOF = 1;
 
   dec->currentSection = pySection;
 

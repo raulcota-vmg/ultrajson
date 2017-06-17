@@ -98,13 +98,16 @@ static FASTCALL_ATTR JSOBJ FASTCALL_MSVC decode_numeric (struct DecoderState *ds
   JSUINT64 intValue;
   JSUINT64 prevIntValue;
   int chr;
-  char *offset = ds->start;
 
-  JSUINT64 overflowLimit = LLONG_MAX;
 
   //force a bunch of contiguous characters without stepping
   //that for sure will fit any possible number
   readNextSectionIfNeeded(ds, 30, 0);
+
+  //now is safe to use offset
+  char *offset = ds->start;
+
+  JSUINT64 overflowLimit = LLONG_MAX;
 
   if (*(offset) == '-')
   {
@@ -370,10 +373,25 @@ static FASTCALL_ATTR JSOBJ FASTCALL_MSVC decode_string ( struct DecoderState *ds
   }
 
   escOffset = ds->escStart;
+
+
+  //force a bunch of contiguous characters without stepping
+  readNextSectionIfNeeded(ds, 10, 0);
+
   inputOffset = (JSUINT8 *) ds->start;
 
   for (;;)
   {
+
+    //Match these
+    ds->start += ((char *)inputOffset - (ds->start));
+
+    //force a bunch of contiguous characters without stepping
+    readNextSectionIfNeeded(ds, 10, 0);
+
+    //Re assign
+    inputOffset = (JSUINT8 *)ds->start;
+
     switch (g_decoderLookup[(JSUINT8)(*inputOffset)])
     {
       case DS_ISNULL:
