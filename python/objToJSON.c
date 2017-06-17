@@ -1010,7 +1010,7 @@ static void Object_endTypeContext(JSOBJ obj, JSONTypeContext *tc)
 
 static const char *Object_getStringValue(JSOBJ obj, JSONTypeContext *tc, size_t *_outLen)
 {
-  return GET_TC(tc)->PyTypeToJSON (obj, tc, NULL, _outLen);
+  return (const char*)GET_TC(tc)->PyTypeToJSON(obj, tc, NULL, _outLen);
 }
 
 static JSINT64 Object_getLongValue(JSOBJ obj, JSONTypeContext *tc)

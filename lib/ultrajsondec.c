@@ -53,10 +53,12 @@ http://www.opensource.apple.com/source/tcl/tcl-14/tcl/license.terms
 #ifndef NULL
 #define NULL 0
 #endif
-
-
+struct DecoderState;
+static void stepDecoderState(struct DecoderState *ds);
+static void readNextSectionIfNeeded(struct DecoderState *ds, size_t forceContiguous, int doStep);
 struct DecoderState
 {
+  void ReadNextSection() { readNextSectionIfNeeded(this, 0, 0); }
   char *start;
   char *end;
   wchar_t *escStart;
@@ -69,7 +71,62 @@ struct DecoderState
   int atEOF; //Indicates if at end of file while streaming
 };
 
-static void stepDecoderState(struct DecoderState *ds);
+class SmartBufferPointer {
+    public:
+    SmartBufferPointer(DecoderState* ds) : _ds(ds) { _offset = _ds->start; }
+    void Reassign(DecoderState* ds) { _ds = ds; _offset = _ds->start; }
+    char* operator()() { return _offset; }
+    operator char* ()  { return _offset; }
+    SmartBufferPointer& operator++() 
+    { 
+       if (_offset + 1 > _ds->end) 
+       { 
+          _ds->ReadNextSection();
+          _offset = _ds->start;
+       }
+       else 
+       { 
+          _offset++;
+       }
+       return *this;
+    }
+    SmartBufferPointer& operator++(int) { 
+      SmartBufferPointer copy(*this);
+      ++(*this);
+      return copy;
+    }
+private:
+    DecoderState* _ds = nullptr;
+    char* _offset = nullptr;
+};
+
+class SmartWBufferPointer {
+    public:
+    SmartWBufferPointer(DecoderState* ds) : _ds(ds) { _offset = ds->escStart; }
+    wchar_t* operator()() { return _offset; }
+    operator wchar_t* ()  { return _offset; }
+    SmartWBufferPointer& operator++() 
+    { 
+       if (_offset + 1 > _ds->escEnd) 
+       { 
+          _ds->ReadNextSection();
+          _offset = _ds->escStart;
+       }
+       else 
+       { 
+          _offset++;
+       }
+       return *this;
+    }
+    SmartWBufferPointer& operator++(int) { 
+      SmartWBufferPointer copy(*this);
+      ++(*this);
+      return copy;
+    }
+private:
+    DecoderState* _ds = nullptr;
+    wchar_t* _offset = nullptr;
+};
 static void readNextSectionIfNeeded(struct DecoderState *ds, size_t forceContiguous, int doStep);
 
 
@@ -112,7 +169,7 @@ static FASTCALL_ATTR JSOBJ FASTCALL_MSVC decode_numeric (struct DecoderState *ds
 
   if (*(offset) == '-')
   {
-    offset ++;
+    offset++;
     intNeg = -1;
     overflowLimit = LLONG_MIN;
   }
@@ -150,18 +207,18 @@ static FASTCALL_ATTR JSOBJ FASTCALL_MSVC decode_numeric (struct DecoderState *ds
           return SetError(ds, -1, overflowLimit == LLONG_MAX ? "Value is too big!" : "Value is too small");
         }
 
-        offset ++;
+        offset++;
         break;
       }
       case '.':
       {
-        offset ++;
+        offset++;
         return decodeDouble(ds);
       }
       case 'e':
       case 'E':
       {
-        offset ++;
+        offset++;
         return decodeDouble(ds);
       }
 
@@ -327,10 +384,10 @@ static FASTCALL_ATTR JSOBJ FASTCALL_MSVC decode_string ( struct DecoderState *ds
   JSUTF16 sur[2] = { 0 };
   int iSur = 0;
   int index;
-  wchar_t *escOffset;
+//   wchar_t *escOffset;
   wchar_t *escStart;
   size_t escLen = (ds->escEnd - ds->escStart);
-  JSUINT8 *inputOffset;
+//   JSUINT8 *inputOffset;
   JSUINT8 oct;
   JSUTF32 ucs;
   ds->lastType = JT_INVALID;
@@ -373,13 +430,13 @@ static FASTCALL_ATTR JSOBJ FASTCALL_MSVC decode_string ( struct DecoderState *ds
     ds->escEnd = ds->escStart + newSize;
   }
 
-  escOffset = ds->escStart;
+  SmartWBufferPointer escOffset(ds);
 
 
   //force a bunch of contiguous characters without stepping
   readNextSectionIfNeeded(ds, FORCE_CONTIGUOUS_STRING, 0);
 
-  inputOffset = (JSUINT8 *) ds->start;
+  SmartBufferPointer inputOffset(ds);// = (JSUINT8 *) ds->start;
 
   for (;;)
   {
@@ -391,7 +448,7 @@ static FASTCALL_ATTR JSOBJ FASTCALL_MSVC decode_string ( struct DecoderState *ds
     readNextSectionIfNeeded(ds, 10, 0);
 
     //Re assign
-    inputOffset = (JSUINT8 *)ds->start;
+    inputOffset.Reassign(ds);
 
     switch (g_decoderLookup[(JSUINT8)(*inputOffset)])
     {
