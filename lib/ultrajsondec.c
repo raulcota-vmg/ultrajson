@@ -67,6 +67,10 @@ struct DecoderState
   JSONObjectDecoder *dec;
 };
 
+static void stepDecoderState(struct DecoderState *ds);
+static void readNextSectionIfNeeded(struct DecoderState *ds);
+
+
 static JSOBJ FASTCALL_MSVC decode_any( struct DecoderState *ds) FASTCALL_ATTR;
 typedef JSOBJ (*PFN_DECODER)( struct DecoderState *ds);
 
@@ -243,21 +247,21 @@ SETERROR:
 
 static FASTCALL_ATTR void FASTCALL_MSVC SkipWhitespace(struct DecoderState *ds)
 {
-  char *offset = ds->start;
+  //char *offset = ds->start;
 
   for (;;)
   {
-    switch (*offset)
+    switch (*ds->start)
     {
       case ' ':
       case '\t':
       case '\r':
       case '\n':
-        offset ++;
+        stepDecoderState(ds);
         break;
 
       default:
-        ds->start = offset;
+        //ds->start = offset;
         return;
     }
   }
@@ -304,7 +308,7 @@ static FASTCALL_ATTR JSOBJ FASTCALL_MSVC decode_string ( struct DecoderState *ds
   JSUINT8 oct;
   JSUTF32 ucs;
   ds->lastType = JT_INVALID;
-  ds->start ++;
+  stepDecoderState(ds);// ds->start++;
 
   if ( (size_t) (ds->end - ds->start) > escLen)
   {
@@ -558,7 +562,7 @@ static FASTCALL_ATTR JSOBJ FASTCALL_MSVC decode_array(struct DecoderState *ds)
   len = 0;
 
   ds->lastType = JT_INVALID;
-  ds->start ++;
+  stepDecoderState(ds);// ds->start++;
 
   for (;;)
   {
@@ -569,7 +573,7 @@ static FASTCALL_ATTR JSOBJ FASTCALL_MSVC decode_array(struct DecoderState *ds)
       ds->objDepth--;
       if (len == 0)
       {
-        ds->start ++;
+        stepDecoderState(ds);// ds->start++;
         return newObj;
       }
 
@@ -589,7 +593,9 @@ static FASTCALL_ATTR JSOBJ FASTCALL_MSVC decode_array(struct DecoderState *ds)
 
     SkipWhitespace(ds);
 
-    switch (*(ds->start++))
+    char start = *ds->start;
+    stepDecoderState(ds);
+    switch (start)
     {
     case ']':
     {
@@ -622,7 +628,7 @@ static FASTCALL_ATTR JSOBJ FASTCALL_MSVC decode_object( struct DecoderState *ds)
 
   newObj = ds->dec->newObject(ds->prv);
 
-  ds->start ++;
+  stepDecoderState(ds);// ds->start++;
 
   for (;;)
   {
@@ -631,7 +637,7 @@ static FASTCALL_ATTR JSOBJ FASTCALL_MSVC decode_object( struct DecoderState *ds)
     if ((*ds->start) == '}')
     {
       ds->objDepth--;
-      ds->start ++;
+      stepDecoderState(ds);// ds->start++;
       return newObj;
     }
 
@@ -653,12 +659,16 @@ static FASTCALL_ATTR JSOBJ FASTCALL_MSVC decode_object( struct DecoderState *ds)
 
     SkipWhitespace(ds);
 
-    if (*(ds->start++) != ':')
+    
+    if (*(ds->start) != ':')
     {
+      stepDecoderState(ds);
       ds->dec->releaseObject(ds->prv, newObj);
       ds->dec->releaseObject(ds->prv, itemName);
       return SetError(ds, -1, "No ':' found when decoding object value");
     }
+    stepDecoderState(ds);
+
 
     SkipWhitespace(ds);
 
@@ -675,7 +685,10 @@ static FASTCALL_ATTR JSOBJ FASTCALL_MSVC decode_object( struct DecoderState *ds)
 
     SkipWhitespace(ds);
 
-    switch (*(ds->start++))
+    
+    char start = *ds->start;
+    stepDecoderState(ds);
+    switch (start)
     {
       case '}':
       {
@@ -724,7 +737,7 @@ static FASTCALL_ATTR JSOBJ FASTCALL_MSVC decode_any(struct DecoderState *ds)
       case '\r':
       case '\n':
         // White space
-        ds->start ++;
+        stepDecoderState(ds);// ds->start++;
         break;
 
       default:
@@ -745,9 +758,11 @@ static void readNextSectionIfNeeded(struct DecoderState *ds) {
   //Update pointers of decoder state if they have ran their course through their 
   //last section from reading the file stream
 
-  if (ds->start < ds->end)
+  if (ds->start < ds->end) {
     //All good still
+    ds->start++;
     return;
+  }
 
   const char *buffer;
   size_t cbBufferFromFile;
