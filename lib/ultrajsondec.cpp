@@ -89,7 +89,11 @@ class SmartBufferPointer {
        }
        return *this;
     }
-    SmartBufferPointer& operator++(int) { return this->operator++(); }
+    SmartBufferPointer& operator++(int) { 
+      SmartBufferPointer copy(*this);
+      ++(*this);
+      return copy;
+    }
 private:
     DecoderState* _ds = nullptr;
     char* _offset = nullptr;
@@ -113,7 +117,11 @@ class SmartWBufferPointer {
        }
        return *this;
     }
-    SmartWBufferPointer& operator++(int) { return this->operator++(); }
+    SmartWBufferPointer& operator++(int) { 
+      SmartWBufferPointer copy(*this);
+      ++(*this);
+      return copy;
+    }
 private:
     DecoderState* _ds = nullptr;
     wchar_t* _offset = nullptr;

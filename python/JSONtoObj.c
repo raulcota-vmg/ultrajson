@@ -58,7 +58,7 @@ static void Object_arrayAddItem(void *prv, JSOBJ obj, JSOBJ value)
   return;
 }
 
-static JSOBJ Object_newString(void */*prv*/, wchar_t *start, wchar_t *end)
+static JSOBJ Object_newString(void * /*prv*/, wchar_t *start, wchar_t *end)
 {
   return PyUnicode_FromWideChar (start, (end - start));
 }
