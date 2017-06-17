@@ -56,12 +56,3 @@ namespace double_conversion
     }
   }
 }
-// struct DecoderState;
-// class SmartBufferPointer {
-//     public:
-//     SmartBufferPointer(DecoderState* ds) : _ds(ds) {}
-// 
-// private:
-//     DecoderState* _ds = nullptr;
-//     char* _offset = nullptr;
-// }
