@@ -113,7 +113,7 @@ static void Object_releaseObject(void *prv, JSOBJ obj)
   Py_DECREF( ((PyObject *)obj));
 }
 
-static void Object_readNextSection(JSONObjectDecoder *dec, const char ** buffer, size_t *cbBuffer)
+static void Object_readNextSection(JSONObjectDecoder *dec, const char ** buffer, size_t *cbBuffer, char * location, int doStep)
 {
   //Read the next section from the file for decoding
 
@@ -121,13 +121,51 @@ static void Object_readNextSection(JSONObjectDecoder *dec, const char ** buffer,
   //Pointer to read function
   PyObject *pyReadFunction = (PyObject *)dec->readFunction;
 
-
   //Section that will be read
   PyObject *pySection = NULL;
-  PyObject *pyTemp = NULL;
 
-  //Remove and decref old python string if needed
-  Py_CLEAR(dec->currentSection);
+  //Variables in case I need concatenation
+  PyObject *pyTemp = NULL;
+  const char * prevSection;
+  int concatenate = 0;
+  PyObject *pyPrevSection = NULL;
+  size_t offset = 0;
+
+
+  //if (contiguousOffset && !dec->currentSection)
+  //  contiguousOffset = 0;
+
+  //First check if I had a pevious section loaded and I want to concatenate
+  
+  if (dec->currentSection) {
+    //If I do, there are two possibilities, that I am at the end and stepping
+    //or not. If at the end and stepping, then I just start in a clean string
+    pyPrevSection = dec->currentSection;
+    prevSection = PyString_AS_STRING(pyPrevSection);
+    size_t prevSize = PyString_GET_SIZE(pyPrevSection);
+    if ((location >= (prevSection + prevSize - 1)) && (doStep)) {
+      //At last character (before null)  and stepping, Don't bother to concatenate
+      concatenate = 0;
+    }
+    
+    else {
+      concatenate = 1;
+
+      //Define an offset for when after it is concatenated
+      offset = location - prevSection;
+    }
+  }
+
+  if (!concatenate)
+    //Remove and decref old python string if needed
+    Py_CLEAR(dec->currentSection);
+  else {
+    //Just make this blank but don't dec ref just yet
+    dec->currentSection = NULL;
+  }
+
+
+
 
   //Clear this
   *cbBuffer = 0;
@@ -166,10 +204,21 @@ static void Object_readNextSection(JSONObjectDecoder *dec, const char ** buffer,
     }
   }
 
+
+  if (concatenate) {
+    //Put them together. pySection will decrease its ref count
+    PyString_ConcatAndDel(&pyPrevSection, pySection);
+
+    //Now make it one big section
+    pySection = pyPrevSection;
+  }
+
+
   //Keep track of it
   const char * temp = PyString_AS_STRING(pySection);
+  temp += offset;
   *buffer = temp;
-  *cbBuffer = PyString_GET_SIZE(pySection);
+  *cbBuffer = ( PyString_GET_SIZE(pySection) - offset );
   dec->currentSection = pySection;
 
 

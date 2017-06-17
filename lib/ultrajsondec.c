@@ -101,6 +101,10 @@ static FASTCALL_ATTR JSOBJ FASTCALL_MSVC decode_numeric (struct DecoderState *ds
 
   JSUINT64 overflowLimit = LLONG_MAX;
 
+  //force a bunch of contiguous characters without stepping
+  //that for sure will fit any possible number
+  readNextSectionIfNeeded(ds, 30, 0);
+
   if (*(offset) == '-')
   {
     offset ++;
@@ -766,31 +770,36 @@ static FASTCALL_ATTR JSOBJ FASTCALL_MSVC decode_any(struct DecoderState *ds)
 static void stepDecoderState(struct DecoderState *ds) {
   //Move the pointer of the character one up but
   //first check if file section should be read again if streaming
-  if (ds->dec->streamFromFile) readNextSectionIfNeeded(ds);
+  if (ds->dec->streamFromFile) readNextSectionIfNeeded(ds, 0, 1);
   else ds->start++;
 
 }
 
-static void readNextSectionIfNeeded(struct DecoderState *ds) {
+
+static void readNextSectionIfNeeded(struct DecoderState *ds, size_t forceContiguous, int doStep) {
   //Update pointers of decoder state if they have ran their course through their 
   //last section from reading the file stream
 
-  if (ds->start < ds->end) {
+  //If from my location + number of contiguous characters needed + step
+  //puts me at end or beyond (end is the null terminator). Then I need to read more from file
+  if ( (ds->start + forceContiguous + doStep) < ds->end) {
     //All good still
-    ds->start++;
+    if (doStep)
+      ds->start+= doStep;
     return;
   }
 
-  const char *buffer;
-  size_t cbBufferFromFile;
-  ds->dec->readNextSection(ds->dec, &buffer, &cbBufferFromFile);
 
-  if (!cbBufferFromFile)
-    //Don't touch it
-    return;
+  const char *buffer;
+  size_t bufferSize;
+  ds->dec->readNextSection(ds->dec, &buffer, &bufferSize, ds->start, doStep);
+
+  //if (!bufferSize)
+  //  //Don't touch it
+  //  return;
 
   ds->start = (char *)buffer;
-  ds->end = ds->start + cbBufferFromFile;
+  ds->end = ds->start + bufferSize; //End is at null terminator
 
 }
 
@@ -808,14 +817,8 @@ JSOBJ JSON_DecodeObject(JSONObjectDecoder *dec, const char *buffer, size_t cbBuf
 
   if (!buffer) {
     //Streaming
-    readNextSectionIfNeeded(&ds);
-    /*size_t cbBufferFromFile;
-    dec->readNextSection(dec, &buffer, &cbBufferFromFile);
-    cbBuffer = cbBufferFromFile;
+    readNextSectionIfNeeded(&ds, 0, 0);
 
-    ds.start = (char *)buffer;
-    ds.end = ds.start + cbBuffer;
-    */
   }
   else {
     ds.start = (char *)buffer;
