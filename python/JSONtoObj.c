@@ -45,7 +45,7 @@ http://www.opensource.apple.com/source/tcl/tcl-14/tcl/license.terms
 
 static void Object_objectAddKey(void *prv, JSOBJ obj, JSOBJ name, JSOBJ value)
 {
-  PyDict_SetItem (obj, name, value);
+  PyDict_SetItem ((PyObject*)obj, (PyObject*)name, (PyObject*)value);
   Py_DECREF( (PyObject *) name);
   Py_DECREF( (PyObject *) value);
   return;
@@ -53,7 +53,7 @@ static void Object_objectAddKey(void *prv, JSOBJ obj, JSOBJ name, JSOBJ value)
 
 static void Object_arrayAddItem(void *prv, JSOBJ obj, JSOBJ value)
 {
-  PyList_Append(obj, value);
+  PyList_Append((PyObject*)obj, (PyObject*)value);
   Py_DECREF( (PyObject *) value);
   return;
 }
@@ -142,7 +142,7 @@ static void Object_readNextSection(JSONObjectDecoder *dec,
   if (dec->currentSection) {
     //If I do, there are two possibilities, that I am at the end and stepping
     //or not. If at the end and stepping, then I just start in a clean string
-    pyPrevSection = dec->currentSection;
+    pyPrevSection = (PyObject*)(dec->currentSection);
     prevSection = PyString_AS_STRING(pyPrevSection);
     size_t prevSize = PyString_GET_SIZE(pyPrevSection);
     if ((location >= (prevSection + prevSize - 1)) && (doStep)) {
@@ -331,10 +331,10 @@ PyObject* _JSONToObj(PyObject* self, PyObject *args, PyObject *kwargs, PyObject 
   dconv_s2d_init(DCONV_S2D_ALLOW_TRAILING_JUNK, 0.0, 0.0, "Infinity", "NaN");
 
   if (decoder.streamFromFile) {
-    ret = JSON_DecodeObject(&decoder, NULL, 0);
+    ret = (PyObject*)JSON_DecodeObject(&decoder, NULL, 0);
   }
   else {
-    ret = JSON_DecodeObject(&decoder, PyString_AS_STRING(sarg), PyString_GET_SIZE(sarg));
+    ret = (PyObject*)JSON_DecodeObject(&decoder, PyString_AS_STRING(sarg), PyString_GET_SIZE(sarg));
   }
 
   dconv_s2d_free();
