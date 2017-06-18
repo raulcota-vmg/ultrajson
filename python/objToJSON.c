@@ -140,6 +140,21 @@ static void *PyNPScalarDoubleToDOUBLE(JSOBJ _obj, JSONTypeContext *tc, void *out
 	*((double *)outValue) = ((PyDoubleScalarObject *)obj)->obval;
 	return NULL;
 }
+
+static void *PyNPScalarIntToINT32(JSOBJ _obj, JSONTypeContext *tc, void *outValue, size_t *_outLen)
+{
+  PyObject *obj = (PyObject *)_obj;
+  *((JSINT32 *)outValue) = ((PyIntScalarObject *)obj)->obval;
+  return NULL;
+}
+
+static void *PyNPScalarLongToINT32(JSOBJ _obj, JSONTypeContext *tc, void *outValue, size_t *_outLen)
+{
+  PyObject *obj = (PyObject *)_obj;
+  *((JSINT32 *)outValue) = ((PyLongScalarObject *)obj)->obval;
+  return NULL;
+}
+
 /*
 static void *PyNPScalarGenericIntToINT64(JSOBJ _obj, JSONTypeContext *tc, void *outValue, size_t *_outLen)
 {
@@ -746,78 +761,89 @@ static void Object_beginTypeContext (JSOBJ _obj, JSONTypeContext *tc, JSONObject
 	  return;
   }
 
-/* TO DO: The code below is almost there but won't bother until needed plus properly tested
+// TO DO: The code below is almost there but won't bother until needed plus properly tested
 
-  else
-  //Double I think is different from float for numpy
-  if (PyArray_IsScalar(obj, Double))
-  {
-	  pc->PyTypeToJSON = PyNPScalarDoubleToDOUBLE; tc->type = JT_DOUBLE;
-	  return;
-  }
+//  else
+//  //Double I think is different from float for numpy
+//  if (PyArray_IsScalar(obj, Double))
+//  {
+//	  pc->PyTypeToJSON = PyNPScalarDoubleToDOUBLE; tc->type = JT_DOUBLE;
+//	  return;
+//  }
 
-  else
-  //This all is ok to convert to integers
-  if (PyArray_IsScalar(obj, Byte))
-  {
-	  tc->type = (((PyByteScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
-	  return;
-  }
-  else
-  if (PyArray_IsScalar(obj, UByte))
-  {
-	  tc->type = (((PyUByteScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
-	  return;
-  }
-  else
-  if (PyArray_IsScalar(obj, Short))
-  {
-	  tc->type = (((PyShortScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
-	  return;
-  }
-  else
-  if (PyArray_IsScalar(obj, UShort))
-  {
-	tc->type = (((PyUShortScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
-	return;
-  }
+//  else
+//  //This all is ok to convert to integers
+//  if (PyArray_IsScalar(obj, Byte))
+//  {
+//	  tc->type = (((PyByteScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
+//	  return;
+//  }
+  
+//  else
+//  if (PyArray_IsScalar(obj, UByte))
+//  {
+//	  tc->type = (((PyUByteScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
+//	  return;
+//  }
+
+//  else
+//  if (PyArray_IsScalar(obj, Short))
+//  {
+//	  tc->type = (((PyShortScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
+//	  return;
+//  }
+
+//  else
+//  if (PyArray_IsScalar(obj, UShort))
+//  {
+//	tc->type = (((PyUShortScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
+//	return;
+//  }
+  
   else
   if (PyArray_IsScalar(obj, Int))
   {
-	tc->type = (((PyIntScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
-	return;
+    pc->PyTypeToJSON = PyNPScalarIntToINT32; tc->type = JT_INT;
+    return;
   }
+
+  
+//  else
+//  if (PyArray_IsScalar(obj, UInt))
+//  {
+//	tc->type = (((PyUIntScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
+//	return;
+//  }
+
   else
-  if (PyArray_IsScalar(obj, UInt))
+  if (PyArray_IsScalar(obj, Long)) //int32 (what we get in 32 bit if we
   {
-	tc->type = (((PyUIntScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
+	  pc->PyTypeToJSON = PyNPScalarLongToINT32; tc->type = JT_INT;
 	return;
   }
-  else
-  if (PyArray_IsScalar(obj, Long))
-  {
-	tc->type = (((PyLongScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
-	return;
-  }
-  else
-  if (PyArray_IsScalar(obj, ULong))
-  {
-	tc->type = (((PyULongScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
-	return;
-  }
-  else
-  if (PyArray_IsScalar(obj, LongLong))
-  {
-	tc->type = (((PyLongLongScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
-	return;
-  }
-  else
-  if (PyArray_IsScalar(obj, ULongLong))
-  {
-	tc->type = (((PyULongLongScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
-	return;
-  }
-  */
+
+//  else
+//  if (PyArray_IsScalar(obj, ULong))
+//  {
+//	tc->type = (((PyULongScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
+//	return;
+//  }
+
+
+//  else
+//  if (PyArray_IsScalar(obj, LongLong))
+//  {
+//	tc->type = (((PyLongLongScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
+//	return;
+//  }
+
+//  else
+//  if (PyArray_IsScalar(obj, ULongLong))
+//  {
+//	tc->type = (((PyULongLongScalarObject *)obj)->obval != 0) ? JT_TRUE : JT_FALSE;
+//	return;
+//  }
+  
 
   else
   if (PyArray_Check(obj))
