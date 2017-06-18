@@ -206,7 +206,7 @@ static void Object_readNextSection(JSONObjectDecoder *dec,
     }
   }
 
-  if (PyString_GET_SIZE(pySection) < dec->streamFromFile)
+  if (PyString_GET_SIZE(pySection) < (Py_ssize_t)dec->streamFromFile)
     *atEOF = 1;
 
   if (concatenate) {
@@ -229,6 +229,12 @@ static void Object_readNextSection(JSONObjectDecoder *dec,
 
 
 }
+
+void Object_endDecoding(JSONObjectDecoder *dec)
+{
+  Py_CLEAR(dec->currentSection);
+}
+
 
 static char *g_kwlist[] = {"obj", 
 						"stream_from_file",
@@ -270,7 +276,8 @@ PyObject* _JSONToObj(PyObject* self, PyObject *args, PyObject *kwargs, PyObject 
     0,
     NULL,
     Object_readNextSection,
-    NULL
+    NULL,
+    Object_endDecoding
   };
 
   decoder.prv = NULL;

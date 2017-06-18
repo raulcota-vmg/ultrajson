@@ -857,6 +857,9 @@ static void readNextSectionIfNeeded(struct DecoderState *ds, size_t forceContigu
   //Update pointers of decoder state if they have ran their course through their 
   //last section from reading the file stream
 
+  if (!ds->dec->streamFromFile)
+    return;
+
   //If from my location + number of contiguous characters needed + step
   //puts me at end or beyond (end is the null terminator). Then I need to read more from file
   if ( (ds->atEOF) || ((ds->start + forceContiguous + doStep) < ds->end) ) {
@@ -922,6 +925,7 @@ JSOBJ JSON_DecodeObject(JSONObjectDecoder *dec, const char *buffer, size_t cbBuf
 
 
   //Make sure we clean this up
+  dec->endDecoding(dec);
 
 
   if (ds.escHeap)

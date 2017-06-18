@@ -375,6 +375,7 @@ typedef struct __JSONObjectDecoder
 
   void *currentSection;
 
+  void(*endDecoding)(struct __JSONObjectDecoder *dec);
 
   char *errorStr;
   char *errorOffset;
