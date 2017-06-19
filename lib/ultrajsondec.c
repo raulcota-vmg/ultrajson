@@ -322,58 +322,89 @@ static const JSUINT8 g_decoderLookup[256] =
   /* 0xf0 */ 4, 4, 4, 4, 4, 4, 4, 4, DS_UTFLENERROR, DS_UTFLENERROR, DS_UTFLENERROR, DS_UTFLENERROR, DS_UTFLENERROR, DS_UTFLENERROR, DS_UTFLENERROR, DS_UTFLENERROR,
 };
 
+
+
+static void EscBufer_Realloc(struct DecoderState *ds, size_t newSize, int *errWasSet)
+{
+
+  wchar_t *escStart;
+  size_t escLen = (ds->escEnd - ds->escStart);
+  *errWasSet = 0;
+  if (ds->escHeap)
+  {
+    //If in the heap, first make sure it will fix
+    if (newSize > (SIZE_MAX / sizeof(wchar_t)))
+    {
+      *errWasSet = 1;
+      SetError(ds, -1, "Could not reserve memory block");
+      return;
+    }
+
+    //Reallocate the memory
+    escStart = (wchar_t *)ds->dec->realloc(ds->escStart, newSize * sizeof(wchar_t));
+    if (!escStart)
+    {
+      ds->dec->free(ds->escStart);
+      *errWasSet = 1;
+      SetError(ds, -1, "Could not reserve memory block");
+      return;
+    }
+
+    //Redefine the start location
+    ds->escStart = escStart;
+  }
+
+  else
+  {
+    //Can't use static memory anymore
+
+    //Make sure it will fit
+    wchar_t *oldStart = ds->escStart;
+    if (newSize > (SIZE_MAX / sizeof(wchar_t)))
+    {
+      *errWasSet = 1;
+      SetError(ds, -1, "Could not reserve memory block");
+      return;
+    }
+
+    //Allocate
+    ds->escStart = (wchar_t *)ds->dec->malloc(newSize * sizeof(wchar_t));
+    if (!ds->escStart)
+    {
+      *errWasSet = 1;
+      SetError(ds, -1, "Could not reserve memory block");
+      return;
+    }
+
+    //Flag as in heap and copy old conents
+    ds->escHeap = 1;
+    memcpy(ds->escStart, oldStart, escLen * sizeof(wchar_t));
+  }
+
+  ds->escEnd = ds->escStart + newSize;
+
+}
+
+
 static FASTCALL_ATTR JSOBJ FASTCALL_MSVC decode_string ( struct DecoderState *ds)
 {
   JSUTF16 sur[2] = { 0 };
   int iSur = 0;
   int index;
   wchar_t *escOffset;
-  wchar_t *escStart;
-  size_t escLen = (ds->escEnd - ds->escStart);
+  //wchar_t *escStart;
+  
   JSUINT8 *inputOffset;
   JSUINT8 oct;
   JSUTF32 ucs;
   ds->lastType = JT_INVALID;
-  stepDecoderState(ds);// ds->start++;
+  stepDecoderState(ds);
 
-  if ( (size_t) (ds->end - ds->start) > escLen)
-  {
-    size_t newSize = (ds->end - ds->start);
+  int memErr = 0;
 
-    if (ds->escHeap)
-    {
-      if (newSize > (SIZE_MAX / sizeof(wchar_t)))
-      {
-        return SetError(ds, -1, "Could not reserve memory block");
-      }
-      escStart = (wchar_t *)ds->dec->realloc(ds->escStart, newSize * sizeof(wchar_t));
-      if (!escStart)
-      {
-        ds->dec->free(ds->escStart);
-        return SetError(ds, -1, "Could not reserve memory block");
-      }
-      ds->escStart = escStart;
-    }
-    else
-    {
-      wchar_t *oldStart = ds->escStart;
-      if (newSize > (SIZE_MAX / sizeof(wchar_t)))
-      {
-        return SetError(ds, -1, "Could not reserve memory block");
-      }
-      ds->escStart = (wchar_t *) ds->dec->malloc(newSize * sizeof(wchar_t));
-      if (!ds->escStart)
-      {
-        return SetError(ds, -1, "Could not reserve memory block");
-      }
-      ds->escHeap = 1;
-      memcpy(ds->escStart, oldStart, escLen * sizeof(wchar_t));
-    }
-
-    ds->escEnd = ds->escStart + newSize;
-  }
-
+  //Point to the beginning
   escOffset = ds->escStart;
+  size_t escLen = (ds->escEnd - ds->escStart);
 
 
   //force a bunch of contiguous characters without stepping
@@ -387,8 +418,33 @@ static FASTCALL_ATTR JSOBJ FASTCALL_MSVC decode_string ( struct DecoderState *ds
     //Match these
     ds->start += ((char *)inputOffset - (ds->start));
 
-    //force a bunch of contiguous characters without stepping
+    /* Force contiguous memory
+
+    Relevant when streaming from file.
+    force a bunch of contiguous characters without stepping
+    the value of 10 contiguous elements is just a safe number that I need per iteration
+    if it needs to reads the next a new section from file it will actually read a big chunk
+    */
     readNextSectionIfNeeded(ds, 10, 0);
+
+
+    /* Make sure escBuffer has enough size */
+    if ((escOffset + 20) > ds->escEnd) {
+      size_t temp = escOffset - ds->escStart;
+
+      //Make it count
+      size_t newSize = (ds->escEnd - ds->escStart) + (JSON_MAX_STACK_BUFFER_SIZE / sizeof(wchar_t));
+
+      EscBufer_Realloc(ds, newSize, &memErr);
+      escLen = (ds->escEnd - ds->escStart);
+      if (memErr)
+        return NULL;
+
+      escOffset = temp + ds->escStart;
+
+    }
+
+
 
     //Re assign
     inputOffset = (JSUINT8 *)ds->start;
@@ -832,7 +888,9 @@ JSOBJ JSON_DecodeObject(JSONObjectDecoder *dec, const char *buffer, size_t cbBuf
   /*
   FIXME: Base the size of escBuffer of that of cbBuffer so that the unicode escaping doesn't run into the wall each time */
   struct DecoderState ds;
+
   wchar_t escBuffer[(JSON_MAX_STACK_BUFFER_SIZE / sizeof(wchar_t))];
+  //wchar_t escBuffer[100];
   JSOBJ ret;
   
   ds.dec = dec;
